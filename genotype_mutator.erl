@@ -1,6 +1,6 @@
 -module(genotype_mutator).
 -export([mutate/2,mutate_weights/1,mutate_plasticity/1,mutate_bias/1,mutate_af/1,add_neuro_link/1,add_sensor_link/1,
-		add_layer_neuron/1,clone/1]).
+		add_layer_neuron/1,add_neuron/1,clone/1]).
 -include("utils.hrl").
 
 
@@ -45,7 +45,7 @@ mutate(Genotype,NMutation)->
 	{Mutators,lists:foldl(fun(Fun,Geno)->?MODULE:Fun(Geno) end,Genotype,Mutators)}.
 
 get_mutators()->
-	[mutate_weights,mutate_bias,mutate_af,add_neuro_link,add_sensor_link,add_layer_neuron,mutate_plasticity].
+	[mutate_weights,mutate_bias,mutate_af,add_neuro_link,add_sensor_link,add_layer_neuron,add_neuron,mutate_plasticity].
 
 apply_neuro_mutation(Genotype,Fun)->%mutazione sul singolo elemento
 	#genotype{cortex=Cortex,neurons=Neurons}=Genotype,
@@ -87,7 +87,7 @@ mutate_af(Genotype)->
 add_neuro_link(Genotype)->%link tra neuroni,o su se stesso oppure tra strati diversi
 	#genotype{neurons=Neurons}=Genotype,
 	NeuronIn=?RANDCHOOSE(Neurons),
-	Pred=fun(N)->N==NeuronIn orelse N#neuron.id<NeuronIn#neuron.id orelse N#neuron.id>NeuronIn#neuron.id end,
+	Pred=fun(N)->N==NeuronIn orelse N#neuron.layer<NeuronIn#neuron.layer orelse N#neuron.layer>NeuronIn#neuron.layer end,
 	{Selected,_}=lists:partition(Pred,Neurons),
 	NeuronOut=?RANDCHOOSE(Selected),
 	RemainNeurons=Neurons--[NeuronIn,NeuronOut],
@@ -118,9 +118,39 @@ add_sensor_link(Genotype)->
 		true->Genotype
 	end.
 
+add_neuron(Genotype)->
+	#genotype{sensors=Sensors,neurons=Neurons,cortex=Cortex}=Genotype,
+	Layers=genotype:get_layers(Genotype),
+	[H|T]=Layers,
+	case T of
+		[]->Genotype;%se ho un solo layer allora niente
+		_->L=?RANDCHOOSE(lists:droplast(Layers)),%ho almeno due strati
+			NewNeuron=genotype:create_neuron(sigmund,L),
+			case L of
+				H->%ho scelto il primo strato
+					Sensor=?RANDCHOOSE(Sensors),
+					Neuron=?RANDCHOOSE([N||N<-Neurons,N#neuron.layer>L]),%seleziono un neurone da uno strato superiore
+					RemainSensors=Sensors--[Sensor],
+					RemainNeurons=Neurons--[Neuron],
+					{NewSensor,NewNeuronConnIn}=connect(Sensor,NewNeuron),
+					{NewConnected,NewOut}=connect(NewNeuronConnIn,Neuron),
+					NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
+					Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex};
+				_->
+					NeuronSup=?RANDCHOOSE([N||N<-Neurons,N#neuron.layer>L]),%seleziono un neurone da uno strato superiore
+					NeuronInf=?RANDCHOOSE([N||N<-Neurons,N#neuron.layer<L]),%seleziono un neurone da uno strato inferiore
+					RemainNeurons=Neurons--[NeuronSup,NeuronInf],
+					{NewInf,NewNeuronConnIn}=connect(NeuronInf,NewNeuron),
+					{NewConnected,NewSup}=connect(NewNeuronConnIn,NeuronSup),
+					NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
+					Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}
+			end
+	end.
+
 add_layer_neuron(Genotype)->%aggiunge un nuovo strato tra due strati con un nuovo neurone connesso
 	#genotype{sensors=Sensors,neurons=Neurons,cortex=Cortex}=Genotype,
 	Layers=genotype:get_layers(Genotype),
+	[H|_]=Layers,
 	case Layers of
 		[1]->%se ho un solo strato,allora connetto tra sensori e neuroni
 			Sensor=?RANDCHOOSE(Sensors),
@@ -134,18 +164,47 @@ add_layer_neuron(Genotype)->%aggiunge un nuovo strato tra due strati con un nuov
 			Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex};
 		Layers->%altrimenti
 			L=?RANDCHOOSE(lists:droplast(Layers)),%seleziona uno strato interno tranne l'ultimo
-			{_,SupLayers}=lists:splitwith(fun(N)->N=<L end,Layers),%prendi gli strati superiori
-			NextLayer=hd(SupLayers),
-			NewLayer=(L+NextLayer)/2,
-			NewNeuron=genotype:create_neuron(sigmund,NewLayer),%lo vado a mettere in mezzo tra L e L+1
-			InfNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron.layer==L]),%seleziona un neurone casualmente tra i neurone dell strato L
-			SupNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron.layer==NextLayer]),%seleziona un neurone casualmente tra i neurone dell strato L+1
-			RemainNeurons=Neurons--[InfNeuron,SupNeuron],%%cavo i neuroni selezionati
-			{NewInf,NewNeuronConnIn}=connect(InfNeuron,NewNeuron),
-			{NewConnected,NewSup}=connect(NewNeuronConnIn,SupNeuron),
-			NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
-			Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}
-	end.
+			case ?RANDCHOOSE([0,1]) of%lancio una moneta
+				0->%lo inserisco prima di L
+					case L of
+						H->%se L è il primo strato
+							Sensor=?RANDCHOOSE(Sensors),
+							NewLayer=(L+0)/2,
+							NewNeuron=genotype:create_neuron(sigmund,NewLayer),
+							SupNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron.layer==L]),%seleziona un neurone casualmente allo strato successivo
+							RemainSensors=Sensors--[Sensor],
+							RemainNeurons=Neurons--[SupNeuron],
+							{NewSensor,NewNeuronConnIn}=connect(Sensor,NewNeuron),
+							{NewConnected,NewOut}=connect(NewNeuronConnIn,SupNeuron),
+							NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
+							Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex};
+						_->
+						{InfLayers,_}=lists:splitwith(fun(N)->N<L end,Layers--[L]),%prendi gli strati inferiori
+						LastLayer=lists:last(InfLayers),
+						NewLayer=(L+LastLayer)/2,%lo sto inserendo prima di L
+						NewNeuron=genotype:create_neuron(sigmund,NewLayer),%lo vado a mettere in mezzo tra L e L+1
+						InfNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron.layer==LastLayer]),%seleziona un neurone casualmente tra i neurone dello strato PRIMA di L
+						SupNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron.layer==L]),%seleziona un neurone casualmente tra i neurone dell strato L
+						RemainNeurons=Neurons--[InfNeuron,SupNeuron],%%cavo i neuroni selezionati
+						{NewInf,NewNeuronConnIn}=connect(InfNeuron,NewNeuron),
+						{NewConnected,NewSup}=connect(NewNeuronConnIn,SupNeuron),
+						NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
+						Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}
+					end;
+				1->%lo inserisco dopo di L
+					{_,SupLayers}=lists:splitwith(fun(N)->N<L end,Layers--[L]),%prendi gli strati superiori
+					NextLayer=hd(SupLayers),
+					NewLayer=(L+NextLayer)/2,%lo sto inserendo dopo di L
+					NewNeuron=genotype:create_neuron(sigmund,NewLayer),%lo vado a mettere in mezzo tra L e L+1
+					InfNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron.layer==L]),%seleziona un neurone casualmente tra i neurone dell strato L
+					SupNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron.layer==NextLayer]),%seleziona un neurone casualmente tra i neurone dello strato SUCCESSIVO ad L
+					RemainNeurons=Neurons--[InfNeuron,SupNeuron],%%cavo i neuroni selezionati
+					{NewInf,NewNeuronConnIn}=connect(InfNeuron,NewNeuron),
+					{NewConnected,NewSup}=connect(NewNeuronConnIn,SupNeuron),
+					NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
+					Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}
+			end
+	end.	
 
 connect(N1,N2)when N1#neuron.layer<N2#neuron.layer->%è una connessione in avanti
 	NewN1=N1#neuron{fanouts=N1#neuron.fanouts++[N2#neuron.id]},

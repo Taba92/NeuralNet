@@ -27,7 +27,7 @@ pheno_to_geno(CortexId)->
 	SensorsGeno=[gen_server:call(SensorId,dump,infinity)||SensorId<-SensorsIds],
 	NeuronsGeno=[gen_server:call(NeuronId,dump,infinity)||NeuronId<-NeuronsIds],
 	ActuatorsGeno=[gen_server:call(ActuatorId,dump,infinity)||ActuatorId<-ActuatorsIds],
-	#genotype{sensors=SensorsGeno,neurons=NeuronsGeno,actuators=ActuatorsGeno,cortex=CortexGeno}.
+	#genotype{sensors=SensorsGeno,neurons=lists:keysort(3,NeuronsGeno),actuators=ActuatorsGeno,cortex=CortexGeno}.
 
 stop_phenotype(CortexId)->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
