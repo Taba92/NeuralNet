@@ -1,0 +1,9 @@
+#!/usr/bin/env escript
+
+main(_) ->
+	%{ok,Pid}=scape:init(),
+	%nn:new(contr,Pid,{ffnn,sigmund,none},{2,1,[2,2]}),
+	%nn:fit(contr,#{type=>shc,cycleShc=>100,tgFit=>0.90}).
+	%nn:fit(contr,#{type=>ashc,constraint=>{ffnn,sigmund,hebbian},cycleShc=>100,tgFit=>0.90,cycleAshc=>100}).
+	population:new(pop,1,{scape,init,[]},{ffnn,sigmund,hebbian},{2,1,[]}),
+	population:evolve(pop,10,100,0.90).
