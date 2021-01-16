@@ -39,8 +39,8 @@ handle_info({fit,Id,Fitness,1},State)->
 	NewRecv=Recv++[Id],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					io:fwrite("FITNESS: ~p~n",[Fitness]),
-					io:fwrite("---------------------------------~n"),
+					%io:fwrite("FITNESS: ~p~n",[Fitness]),
+					%io:fwrite("---------------------------------~n"),
 					Control ! {fitness,Fitness},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}

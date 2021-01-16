@@ -9,7 +9,41 @@ fit(State,Parameters)when map_get(type,Parameters)==shc->
 fit(State,Parameters)when map_get(type,Parameters)==ashc->
 	#agent{genotype=Geno,fitness=Fit}=State,
 	AlgoParameters=maps:merge(Parameters,#{curGeno=>null,curFit=>null,bestGeno=>Geno,bestFit=>Fit}),
-	fit_ashc(State,AlgoParameters).
+	fit_ashc(State,AlgoParameters);
+fit(State,Parameters)when map_get(type,Parameters)==eshc->
+	#agent{genotype=Geno,fitness=Fit}=State,
+	AlgoParameters=maps:merge(Parameters,#{curGeno=>null,curFit=>null,bestGeno=>Geno,bestFit=>Fit}),
+	fit_eshc(State,AlgoParameters).
+
+
+fit_eshc(State,AlgoParameters)->
+	#agent{scape=Scape,genotype=Genotype,cortexId=CortexId}=State,
+	#{cycleEshc:=CycleEshc,mutations:=NMut,tgFit:=TgFit,bestGeno:=BestGeno,bestFit:=BestFit}=AlgoParameters,
+	case (CycleEshc==0) or (BestFit>=TgFit) of
+		true->
+			NewState=State#agent{genotype=BestGeno,fitness=BestFit},
+			{NewState,BestGeno,BestFit};
+		false->
+			{_,NewGeno}=genotype_mutator:mutate(Genotype,NMut),
+			phenotype:stop_phenotype(CortexId),
+			phenotype:geno_to_pheno(NewGeno),
+			NewCortexId=genotype:get_cortex_id(NewGeno),
+			NewState=phenotype:link_to_cortex(State,NewCortexId),
+			phenotype:link_nn_to_scape(NewGeno,Scape),
+			NewAlgoParameters=maps:merge(AlgoParameters,#{curGeno=>NewGeno,curFit=>0}),
+			{_,FittedNewGeno,NewFitness}=fit_shc(NewState,NewAlgoParameters),
+			case NewFitness > BestFit of
+				true->
+					NewParams=maps:merge(NewAlgoParameters,#{bestGeno=>FittedNewGeno,bestFit=>NewFitness,cycleEshc=>CycleEshc-1}),
+					fit_eshc(NewState,NewParams);
+				false->
+					phenotype:geno_to_pheno(BestGeno),
+					NewState=phenotype:link_to_cortex(State,NewCortexId),
+					phenotype:link_nn_to_scape(BestGeno,Scape),
+					NewParams=maps:merge(NewAlgoParameters,#{cycleEshc=>CycleEshc-1}),
+					fit_eshc(State,NewParams)
+			end
+	end.
 
 fit_ashc(State,AlgoParameters)->
 	#agent{scape=Scape,genotype=Genotype,cortexId=CortexId}=State,

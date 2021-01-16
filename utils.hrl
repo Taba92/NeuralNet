@@ -3,7 +3,7 @@
 -define(E,2.71828182845904523536).
 -define(RANGE(Sup),round(math:floor(Sup))).
 -define(PROB(Sup),1==rand:uniform(?RANGE(Sup))).
--define(SAT_LIMIT,?E).
+-define(SAT_LIMIT,math:pi()).
 -define(RANDCHOOSE(List),lists:nth(rand:uniform(length(List)),List)).
 
 -record(population,{id,agents=[]}).

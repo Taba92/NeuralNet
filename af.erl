@@ -3,8 +3,9 @@
 -include("utils.hrl").
 
 get_afs()->[iperbolic,rectifier,threshold,sigmund].
+%get_afs()->[iperbolic,threshold,sigmund].
 
 threshold(X)->case X<0 of true->0;_->1 end.
 rectifier(X)->max(0,X).
 sigmund(X)->1/(1+math:pow(?E,-1*X)).
-iperbolic(X)->(1-math:pow(?E,-2*X))/(1+math:pow(?E,-2*X)).
+iperbolic(X)->(math:pow(?E,X)-math:pow(?E,-1*X))/(math:pow(?E,X)+math:pow(?E,-1*X)).

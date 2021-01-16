@@ -21,10 +21,9 @@ get_plasticity(Weight,hebbian)->{hebbian,?PLAST(Weight)};
 get_plasticity(Weight,oja)->{oja,?PLAST(Weight)};
 get_plasticity(Weight,neuromod)->get_plasticity(Weight,{neuromod,0});
 get_plasticity(Weight,{neuromod,N})when N=<5,N>=0->
-	M={?PLAST(Weight),?RAND},
 	NeuronModulators=[{?PLAST(Weight),?RAND}||_<-lists:seq(1,N)],
 	NormalModulators=[?PLAST(Weight)||_<-lists:seq(1,5-N)],
-	{neuromod,N,[M]++NeuronModulators++NormalModulators}.
+	{neuromod,N,NeuronModulators++NormalModulators}.
 
 apply_plasticity(Weights,Signals,Output)->	
 	apply_plasticity(Weights,Signals,Output,[]).
@@ -57,35 +56,19 @@ oja(Weight,LearnParams,Sig,Output)->
 	[saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-D].
 
 neuromod(N,Weight,LearnParams,Sig,Output)->
-	[M|OtherLearnParams]=LearnParams,
-	ModM=modulate(M,Sig),
-	NewM=[scale_dzone(El,0.33,?SAT_LIMIT)||El<-ModM],
-	{Modulator,NotModulator}=lists:split(N,OtherLearnParams),
+	{Modulator,NotModulator}=lists:split(N,LearnParams),
 	[H,A,B,C,D]=[modulate(Mod,Sig)||Mod<-Modulator]++NotModulator,
 	P1=dot(A,dot(Sig,Output)),
 	P2=dot(B,Sig),
 	P3=dot(C,Output),
 	P4=sum(P1,sum(P2,sum(P3,D))),
-	P5=dot(dot(NewM,H),P4),
+	P5=dot(H,P4),
 	P6=sum(Weight,P5),
 	[saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-P6].
 
 modulate({Weight,Bias},Sig)->
 	Dot=dot(Weight,Sig,0),
 	[af:iperbolic(Dot+Bias)].
-
-scale_dzone(Val,Threshold,MaxMagnitude)->
-	if
-		Val > Threshold ->(scale(Val,MaxMagnitude,Threshold)+1)*MaxMagnitude/2;
-		Val < -Threshold ->(scale(Val,-Threshold,-MaxMagnitude)-1)*MaxMagnitude/2;
-		true ->0
-	end.
-
-scale(Val,Max,Min)->
-	case Max == Min of
-		true ->0;
-		false ->(Val*2 - (Max+Min))/(Max-Min)
-	end.
 
 saturate(C,Min,Max)->
 	if

@@ -1,7 +1,7 @@
 -module(population_monitor).
 -export([init/1,handle_call/3,terminate/2]).
 -define(EFF,0.1).
--define(POP_LIMIT,10).
+-define(POP_LIMIT,20).
 -include("utils.hrl").
 -record(selection,{agent,truefit,allotedOffspring,nao}).
 
@@ -27,7 +27,7 @@ handle_call({evolve,Generation,Cycle,TgFit},_,State)->
 
 evolution(State,Params,Generation,EvoParams)->
 	#{generation:=Gen,tgfit:=TgFit}=EvoParams,
-	[nn:fit(Agent,Params)||Agent<-State#population.agents],
+	[nn:fit(Agent,Params,[async])||Agent<-State#population.agents],
 	AgentsFitted=[nn:get(Agent)||Agent<-State#population.agents],
 	[nn:stop(Agent)||Agent<-State#population.agents],
 	TrueFitted=[true_fit(Agent)||Agent<-AgentsFitted],

@@ -41,7 +41,7 @@ clone(Genotype)->
 	#genotype{sensors=switch_ids(Sensors,MappingIds),neurons=switch_ids(Neurons,MappingIds),actuators=switch_ids(Actuators,MappingIds),cortex=switch_ids(Cortex,MappingIds)}.
 
 mutate(Genotype,NMutation)->
-	Mutators=[?RANDCHOOSE(get_mutators())||_<-lists:seq(1,NMutation+1)],
+	Mutators=[?RANDCHOOSE(get_mutators())||_<-lists:seq(1,NMutation)],
 	{Mutators,lists:foldl(fun(Fun,Geno)->?MODULE:Fun(Geno) end,Genotype,Mutators)}.
 
 get_mutators()->

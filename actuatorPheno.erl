@@ -24,10 +24,10 @@ handle_cast({neuron,_,_,forward_fit,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
 	#actuator{id=Id,vl=Vl,cortexId=CortexId}=GenoType,
 	NewRecv=Recv++Signal,
-	io:fwrite("SIGNAL: ~p~n",[Signal]),
+	%io:fwrite("SIGNAL: ~p~n",[Signal]),
 	NewState=case length(NewRecv)==Vl of
 				true->
-					{Ret,Flag}=gen_server:call(Scape,{action,NewRecv},infinity),
+					{Ret,Flag}=gen_server:call(Scape,{action_fit,NewRecv},infinity),
 					CortexId ! {fit,Id,?NORMFIT(Ret),Flag},
 					State#state{received=[]};
 				false->
@@ -38,7 +38,7 @@ handle_cast({neuron,_,_,forward_predict,Signal},State)->
 	#state{received=Recv,genotype=GenoType}=State,
 	#actuator{id=Id,vl=Vl,cortexId=CortexId}=GenoType,
 	NewRecv=Recv++Signal,
-	io:fwrite("SIGNAL: ~p~n",[Signal]),
+	%io:fwrite("SIGNAL: ~p~n",[Signal]),
 	NewState=case length(NewRecv)==Vl of
 				true->
 					CortexId ! {predict,Id,NewRecv},

@@ -13,7 +13,7 @@ get_actuators_ids(Genotype)->#genotype{actuators=Actuators}=Genotype,[Act#actuat
 get_ids(Genotype)->get_sensors_ids(Genotype)++get_neurons_ids(Genotype)++get_actuators_ids(Genotype)++[get_cortex_id(Genotype)].
 get_geno_spec(Genotype)->
 	#genotype{sensors=[S],actuators=[A]}=Genotype,
-	{S#sensor.vl,A#actuator.vl,get_layers(Genotype)}.
+	{S#sensor.vl,A#actuator.vl,lists:droplast(get_layers(Genotype))}.
 
 get_layers(Genotype)->
 	#genotype{neurons=Net}=Genotype,

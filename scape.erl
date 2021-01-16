@@ -17,7 +17,7 @@ init([])->
 handle_call(sense,_,State)->
 	#state{curRd=[{Signal,_}|_]}=State,
 	{reply,Signal,State};
-handle_call({action,Predict},_,State)->
+handle_call({action_fit,Predict},_,State)->
 	#state{curRd=[{_,Truth}|T],truthTable=Xor,errAcc=ErrAcc}=State,
 	Error = list_compare(Predict,Truth,0),
 	case T of
