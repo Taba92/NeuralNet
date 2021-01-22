@@ -2,7 +2,6 @@
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
 -export([perturbate/3]).
--define(ORD(List),lists:keysort(1,List)).
 -record(state,{received,roreceived,oldBias,oldWeights,oldRoWeights,genotype}).
 -include("utils.hrl").
 
@@ -64,24 +63,23 @@ handle_cast({ElType,FromLayer,IdFrom,FwdType,Signal},State)when ElType==sensor;E
 					false->
 						State#state{received=NewRecv,roreceived=NewRoRecv}
 			end,
-	%io:fwrite("NEW STATE: ~p~n",[NewState]),
 	{noreply,NewState}.
 
-aggregate([nil|_],_)->0;%nel caso avessi connessioni ricorsive e fossi all'inizio del fit
-aggregate(Signals,Weights)->
-	aggregate(?ORD(Signals),?ORD(Weights),0). 
-aggregate([],[],Acc)->Acc;
-aggregate([{Id,Signal}|T],[{Id,Weight,_}|K],Acc)->
-	aggregate(T,K,Acc+dot(Signal,Weight,Acc)).
-
 prunSignals(Signals,Len)->%nel caso il numero di segnali ricevuti sia maggiore di quelli permessi allora scarta quelli in eccesso
-%bisognerebbe stare attenti a quando si pota,si dovrebbe avere segnali in uscita con TUTTI gli Id diversi!
 	case length(Signals)=<Len of
 		true->Signals;
 		false->{LenSignals,_}=lists:split(Len,Signals),
 				LenSignals
 	end.
 
+aggregate([nil|_],_)->0;%nel caso avessi connessioni ricorsive e fossi all'inizio del fit
+aggregate(Signals,Weights)->
+	aggregate(Signals,Weights,0). 
+aggregate([],_,Acc)->Acc;
+aggregate([{Id,Signal}|T],Weight,Acc)->
+	{Id,W,_}=lists:keyfind(Id,1,Weight),
+	aggregate(T,Weight,Acc+dot(Signal,W,Acc)).
+	
 
 perturbate_plast({Id,Weight,Mod},Sup)->
 	case ?PROB(Sup) of
@@ -122,15 +120,14 @@ dot([],[],Dot)->Dot;
 dot([S|T],[W|K],Acc)->
 	dot(T,K,Acc+S*W).
 
-
 learn(GenoType,Output,Recv,[nil|_])->%è all'inizio,non ho segnali ricorsivi in entrata nel neurone!
 	#neuron{faninsWeights=Ins}=GenoType,
 	%io:fwrite("*****~nGENO: ~p~n INS: ~p~n RECV: ~p~n*****~n",[GenoType,Ins,Recv]),
-	NewIns=plasticity:apply_plasticity(lists:keysort(1,Ins),lists:keysort(1,Recv),Output),
+	NewIns=plasticity:apply_plasticity(Ins,Recv,Output),
 	GenoType#neuron{faninsWeights=NewIns};
 learn(GenoType,Output,Recv,RoRecv)->%%inizia ad avere segnali ricorsivi in entrata
 	#neuron{faninsWeights=Ins,roinsWeights=RoIns}=GenoType,
 	%io:fwrite("****~nGENO: ~p~n INS: ~p~n RECV: ~p~n ROINS: ~p~n RORECV: ~p~n****~n",[GenoType,Ins,Recv,RoIns,RoRecv]),
-	NewIns=plasticity:apply_plasticity(?ORD(Ins),?ORD(Recv),Output),
-	NewRoIns=plasticity:apply_plasticity(?ORD(RoIns),?ORD(RoRecv),Output),
+	NewIns=plasticity:apply_plasticity(Ins,Recv,Output),
+	NewRoIns=plasticity:apply_plasticity(RoIns,RoRecv,Output),
 	GenoType#neuron{faninsWeights=NewIns,roinsWeights=NewRoIns}.

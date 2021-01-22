@@ -18,13 +18,13 @@ fit(State,Parameters)when map_get(type,Parameters)==eshc->
 
 fit_eshc(State,AlgoParameters)->
 	#agent{scape=Scape,genotype=Genotype,cortexId=CortexId}=State,
-	#{cycleEshc:=CycleEshc,mutations:=NMut,tgFit:=TgFit,bestGeno:=BestGeno,bestFit:=BestFit}=AlgoParameters,
+	#{cycleEshc:=CycleEshc,mutations:=NMut,constraint:=Constraint,tgFit:=TgFit,bestGeno:=BestGeno,bestFit:=BestFit}=AlgoParameters,
 	case (CycleEshc==0) or (BestFit>=TgFit) of
 		true->
 			NewState=State#agent{genotype=BestGeno,fitness=BestFit},
 			{NewState,BestGeno,BestFit};
 		false->
-			{_,NewGeno}=genotype_mutator:mutate(Genotype,NMut),
+			NewGeno=genotype_mutator:mutate(Genotype,NMut,Constraint),
 			phenotype:stop_phenotype(CortexId),
 			phenotype:geno_to_pheno(NewGeno),
 			NewCortexId=genotype:get_cortex_id(NewGeno),

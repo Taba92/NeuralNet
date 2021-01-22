@@ -23,14 +23,12 @@ handle_info(fit_cycle,State)->
 	#state{genotype=GenoType}=State,
 	#cortex{sensorsIds=SensorsIds}=GenoType,
 	Sync=fun(Sensor)->gen_server:cast(Sensor,sync_fit) end,
-	%Sync=fun(Sensor)->Sensor ! sync_fit end,
 	lists:foreach(Sync,SensorsIds),
 	{noreply,State};
 handle_info({predict_cycle,Signal},State)->
 	#state{genotype=GenoType}=State,
 	#cortex{sensorsIds=SensorsIds}=GenoType,
 	Sync=fun(Sensor)->Sensor ! {sync_predict,Signal} end,
-	%Sync=fun(Sensor)->Sensor ! {sync_predict,Signal} end,
 	lists:foreach(Sync,SensorsIds),
 	{noreply,State};
 handle_info({fit,Id,Fitness,1},State)->
@@ -39,8 +37,8 @@ handle_info({fit,Id,Fitness,1},State)->
 	NewRecv=Recv++[Id],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					%io:fwrite("FITNESS: ~p~n",[Fitness]),
-					%io:fwrite("---------------------------------~n"),
+					io:fwrite("FITNESS: ~p~n",[Fitness]),
+					io:fwrite("---------------------------------~n"),
 					Control ! {fitness,Fitness},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}

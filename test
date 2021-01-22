@@ -1,10 +1,16 @@
 #!/usr/bin/env escript
 
-main(_) ->
-	{ok,Pid}=scape:init(),
-	nn:new(contr,Pid,{rnn,rectifier,{neuromod,2}},{2,1,[]}),
-	nn:fit(contr,#{type=>shc,cycleShc=>1000,tgFit=>0.90}).
-	%nn:fit(contr,#{type=>eshc,mutations=>3,cycleEshc=>100,cycleShc=>100,tgFit=>0.90}).
+main(["evo"])->
+	Geno=genotype:create_NN({ffnn,sigmund,none},2,1,[]),
+	Constraint={[add_neuron,add_layer_neuron],[{af,none},{plast,none}]},
+	GenoM=genotype_mutator:mutate(Geno,6,Constraint),
+	io:fwrite("~p~n",[GenoM]);
+main(["fit"]) ->
+	%{ok,Pid}=scape:init(),
+	%nn:new(contr,Pid,{rnn,tanh,{neuromod,2}},{2,1,[]}),
+	%nn:fit(contr,#{type=>shc,cycleShc=>1000,tgFit=>0.90}).
+	Constraint={none,[{af,[threshold]},{plast,none}]},
+	%nn:fit(contr,#{type=>eshc,mutations=>3,constraint=>Constraint,cycleEshc=>100,cycleShc=>100,tgFit=>0.90},sync).
 	%nn:fit(contr,#{type=>ashc,constraint=>{rnn,rectifier,{neuromod,2}},cycleShc=>100,tgFit=>0.99,cycleAshc=>100}).
-	%population:new(pop,1,{scape,init,[]},{ffnn,sigmund,hebbian},{2,1,[]}),
-	%population:evolve(pop,20,100,0.90).
+	population:new(pop,1,{scape,init,[]},{ffnn,threshold,hebbian},{2,1,[]}),
+	population:evolve(pop,20,Constraint,100,0.95).

@@ -24,11 +24,9 @@ handle_cast(sync_fit,State)->
 	#sensor{id=Id,fanouts=Pids}=GenoType,
 	Signal=gen_server:call(Scape,sense),
 	[gen_server:cast(Pid,{sensor,0,Id,forward_fit,Signal})||Pid<-Pids],
-	%[Pid ! {sensor,0,Id,forward_fit,Signal}||Pid<-Pids],
 	{noreply,State};
 handle_cast({sync_predict,Signal},State)->
 	#state{genotype=GenoType}=State,
 	#sensor{id=Id,fanouts=Pids}=GenoType,
 	[gen_server:cast(Pid,{sensor,0,Id,forward_predict,Signal})||Pid<-Pids],
-	%[Pid ! {sensor,0,Id,forward_predict,Signal}||Pid<-Pids],
 	{noreply,State}.

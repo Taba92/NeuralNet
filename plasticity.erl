@@ -1,20 +1,21 @@
 -module(plasticity).
--export([get_plasticity/2,apply_plasticity/3,rand_plast/2]).
+-export([all/0,random_plasticity/1,get_rand_plast/2,get_plasticity/2,apply_plasticity/3]).
 -define(PLAST(Weight),[?RAND||_<-lists:seq(1,length(Weight))]).
 -include("utils.hrl").
 
-rand_plast(Weight,none)->
-	NewPlast=?RANDCHOOSE([hebbian,oja,{neuromod,?RANDCHOOSE(lists:seq(0,5))}]),
-	get_plasticity(Weight,NewPlast);
-rand_plast(Weight,{hebbian,_})->
-	NewPlast=?RANDCHOOSE([none,oja,{neuromod,?RANDCHOOSE(lists:seq(0,5))}]),
-	get_plasticity(Weight,NewPlast);
-rand_plast(Weight,{oja,_})->
-	NewPlast=?RANDCHOOSE([hebbian,none,{neuromod,?RANDCHOOSE(lists:seq(0,5))}]),
-	get_plasticity(Weight,NewPlast);
-rand_plast(Weight,{neuromod,N,_})->
-	NewPlast=?RANDCHOOSE([none,hebbian,oja,{neuromod,?RANDCHOOSE(lists:seq(0,5)--[N])}]),
+get_rand_plast(Weight,PlastChoiches)->
+	NewPlast=random_plasticity(PlastChoiches),
 	get_plasticity(Weight,NewPlast).
+
+random_plasticity(PlastChoiches)->
+	NewPlast=?RANDCHOOSE(PlastChoiches),
+	case NewPlast of
+		neuromod->{neuromod,?RANDCHOOSE(lists:seq(0,5))};
+		_->NewPlast
+	end.
+
+all()->
+	[none,hebbian,oja,neuromod].
 
 get_plasticity(_,none)->none;
 get_plasticity(Weight,hebbian)->{hebbian,?PLAST(Weight)};
@@ -28,34 +29,36 @@ get_plasticity(Weight,{neuromod,N})when N=<5,N>=0->
 apply_plasticity(Weights,Signals,Output)->	
 	apply_plasticity(Weights,Signals,Output,[]).
 
-apply_plasticity([],[],_,Acc)->Acc;
-apply_plasticity([{Id,Weight,none}|T],[{Id,_}|K],Output,Acc)->
-	apply_plasticity(T,K,Output,Acc++[{Id,Weight,none}]);
-apply_plasticity([{Id,Weight,{hebbian,LearnParams}}|T],[{Id,Sig}|K],Output,Acc)->
+apply_plasticity([],_,_,Acc)->Acc;
+apply_plasticity([{Id,Weight,none}|T],Signals,Output,Acc)->
+	apply_plasticity(T,Signals,Output,Acc++[{Id,Weight,none}]);
+apply_plasticity([{Id,Weight,{hebbian,LearnParams}}|T],Signals,Output,Acc)->
+	{Id,Sig}=lists:keyfind(Id,1,Signals),
 	NewInWeight={Id,hebbian(Weight,LearnParams,Sig,Output),{hebbian,LearnParams}},
-	apply_plasticity(T,K,Output,Acc++[NewInWeight]);
-apply_plasticity([{Id,Weight,{oja,LearnParams}}|T],[{Id,Sig}|K],Output,Acc)->
+	apply_plasticity(T,Signals,Output,Acc++[NewInWeight]);
+apply_plasticity([{Id,Weight,{oja,LearnParams}}|T],Signals,Output,Acc)->
+	{Id,Sig}=lists:keyfind(Id,1,Signals),
 	NewInWeight={Id,oja(Weight,LearnParams,Sig,Output),{oja,LearnParams}},
-	apply_plasticity(T,K,Output,Acc++[NewInWeight]);
-apply_plasticity([{Id,Weight,{neuromod,N,LearnParams}}|T],[{Id,Sig}|K],Output,Acc)->
+	apply_plasticity(T,Signals,Output,Acc++[NewInWeight]);
+apply_plasticity([{Id,Weight,{neuromod,N,LearnParams}}|T],Signals,Output,Acc)->
+	{Id,Sig}=lists:keyfind(Id,1,Signals),
 	NewInWeight={Id,neuromod(N,Weight,LearnParams,Sig,Output),{neuromod,N,LearnParams}},
-	apply_plasticity(T,K,Output,Acc++[NewInWeight]).
+	apply_plasticity(T,Signals,Output,Acc++[NewInWeight]).
 
-
-hebbian(Weight,LearnParams,Sig,Output)->
+hebbian(Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*InputSignal*Output
 	A=dot(Sig,Output),
 	B=dot(LearnParams,A),
 	C=sum(Weight,B),
 	[saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-C].
 
-oja(Weight,LearnParams,Sig,Output)->
+oja(Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*Output*(InputSignal–O*W(t))
 	A=sub(Sig,dot(Weight,Output)),
 	B=dot(Output,A),
 	C=dot(LearnParams,B),
 	D=sum(Weight,C),
 	[saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-D].
 
-neuromod(N,Weight,LearnParams,Sig,Output)->
+neuromod(N,Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*(A*InputSignal*Output+B*InputSignal+C*Output+D),
 	{Modulator,NotModulator}=lists:split(N,LearnParams),
 	[H,A,B,C,D]=[modulate(Mod,Sig)||Mod<-Modulator]++NotModulator,
 	P1=dot(A,dot(Sig,Output)),
@@ -68,7 +71,7 @@ neuromod(N,Weight,LearnParams,Sig,Output)->
 
 modulate({Weight,Bias},Sig)->
 	Dot=dot(Weight,Sig,0),
-	[af:iperbolic(Dot+Bias)].
+	[af:tanh(Dot+Bias)].
 
 saturate(C,Min,Max)->
 	if
