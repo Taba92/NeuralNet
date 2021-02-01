@@ -27,6 +27,17 @@ handle_cast(sync_fit,State)->
 	{noreply,State};
 handle_cast({sync_predict,Signal},State)->
 	#state{genotype=GenoType}=State,
-	#sensor{id=Id,fanouts=Pids}=GenoType,
-	[gen_server:cast(Pid,{sensor,0,Id,forward_predict,Signal})||Pid<-Pids],
+	#sensor{id=Id,funs=Funs,fanouts=Pids}=GenoType,
+	ProcessedSig=eval_funs(Signal,Funs),
+	[gen_server:cast(Pid,{sensor,0,Id,forward_predict,ProcessedSig})||Pid<-Pids],
 	{noreply,State}.
+
+%%FUNCTIONS USED TO PREPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR AS FIRST ARGUMENT!!!
+eval_funs(Signal,undefined)->Signal;
+eval_funs(Signal,[])->Signal;
+eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
+	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
+	eval_funs(NewSignal,T);
+eval_funs(Signal,[{Fun,ExtraArgs}|T])when is_function(Fun),is_list(ExtraArgs)->
+	NewSignal=erlang:apply(Fun,[Signal|ExtraArgs]),
+	eval_funs(NewSignal,T).

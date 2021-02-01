@@ -32,13 +32,7 @@ handle_call({predict,Signal},_,State)->
 	#agent{cortexId=CortexId}=State,
 	CortexId ! {predict_cycle,Signal},
 	receive {prediction,Prediction}->ok end,
-	{reply,Prediction,State};
-handle_call({predict_fwd,Signal,Pids},_,State)->
-	#agent{cortexId=CortexId}=State,
-	CortexId ! {predict_cycle,Signal},
-	receive {prediction,Prediction}->ok end,
-	[Pid ! Prediction||Pid<-Pids],
-	{reply,Prediction,State};		
+	{reply,Prediction,State};	
 handle_call({fit,Params},_,State)->
 	%io:fwrite("GENO FITTING: ~p~n",[State#agent.genotype]),
 	{NewState,_,Fitness}=trainer:fit(State,Params),

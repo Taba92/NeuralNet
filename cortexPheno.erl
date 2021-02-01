@@ -28,10 +28,10 @@ handle_info(fit_cycle,State)->
 handle_info({predict_cycle,Signal},State)->
 	#state{genotype=GenoType}=State,
 	#cortex{sensorsIds=SensorsIds}=GenoType,
-	Sync=fun(Sensor)->Sensor ! {sync_predict,Signal} end,
+	Sync=fun(Sensor)->gen_server:cast(Sensor,{sync_predict,Signal}) end,
 	lists:foreach(Sync,SensorsIds),
 	{noreply,State};
-handle_info({fit,Id,Fitness,1},State)->
+handle_info({fit,Id,finish,Fitness,Term},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
 	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
 	NewRecv=Recv++[Id],
@@ -39,20 +39,18 @@ handle_info({fit,Id,Fitness,1},State)->
 				true->
 					io:fwrite("FITNESS: ~p~n",[Fitness]),
 					io:fwrite("---------------------------------~n"),
-					Control ! {fitness,Fitness},
+					Control ! {fitness,Fitness,Term},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
 			end,
 	{noreply,NewState};
-handle_info({fit,Id,_,0},State)->
-	#state{received=Recv,genotype=GenoType}=State,
-	#cortex{sensorsIds=SensorsIds,actuatorsIds=ActuatorsIds}=GenoType,
+handle_info({fit,Id,another,Fitness,Term},State)->
+	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
+	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
 	NewRecv=Recv++[Id],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					Sync=fun(Sensor)->gen_server:cast(Sensor,sync_fit) end,
-					%Sync=fun(Sensor)->Sensor ! sync_fit end,
-					lists:foreach(Sync,SensorsIds),
+					Control ! {partial_fitness,Fitness,Term},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
 			end,

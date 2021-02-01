@@ -6,11 +6,21 @@ main(["evo"])->
 	GenoM=genotype_mutator:mutate(Geno,6,Constraint),
 	io:fwrite("~p~n",[GenoM]);
 main(["fit"]) ->
-	%{ok,Pid}=scape:init(),
-	%nn:new(contr,Pid,{rnn,tanh,{neuromod,2}},{2,1,[]}),
-	%nn:fit(contr,#{type=>shc,cycleShc=>1000,tgFit=>0.90}).
-	Constraint={none,[{af,[threshold]},{plast,none}]},
-	%nn:fit(contr,#{type=>eshc,mutations=>3,constraint=>Constraint,cycleEshc=>100,cycleShc=>100,tgFit=>0.90},sync).
-	%nn:fit(contr,#{type=>ashc,constraint=>{rnn,rectifier,{neuromod,2}},cycleShc=>100,tgFit=>0.99,cycleAshc=>100}).
-	population:new(pop,1,{scape,init,[]},{ffnn,threshold,hebbian},{2,1,[]}),
-	population:evolve(pop,20,Constraint,100,0.95).
+	Xor=[[1,1,1,"1"],
+		[0,0,1,"1"],
+		[0,1,0,"0"],
+		[1,0,0,"0"],
+		[0,1,1,"1"],
+		[1,0,1,"1"]],
+	{ok,Pid}=classification:start("test.csv",fun csv:read/1),
+	classification:extract_info(Pid),
+	nn:new(contr,Pid,{ffnn,sigmund,none},{3,2,[]}),
+	nn:fit(contr,#{type=>shc,cycleShc=>1000,tgFit=>0.90},sync),
+	%nn:fit(contr,#{type=>backprop,cycleBack=>100,learning=>0,tgFit=>0.90},sync),
+	%Constraint=none,
+	%nn:fit(contr,#{type=>eshc,mutations=>3,constraint=>Constraint,cycleEshc=>100,cycleShc=>100,tgFit=>0.9},sync),
+	%nn:fit(contr,#{type=>ashc,constraint=>{ffnn,sigmund,hebbian},cycleShc=>100,tgFit=>0.90,cycleAshc=>100},sync).
+	io:fwrite("PRED: ~p~n",[nn:predict(contr,[0,0,0],sync)]),
+	io:fwrite("PRED: ~p~n",[nn:predict(contr,[1,1,0],sync)]).
+	%population:new(pop,1,{scape,init,[]},{ffnn,rectifier,hebbian},{2,1,[]}),
+	%population:evolve(pop,20,Constraint,100,0.95).

@@ -2,7 +2,7 @@
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
 -record(state,{scapeId,received,genotype}).
--define(NORMFIT(Fit),max(0,Fit)).
+-define(NORMFIT(Fit),case is_number(Fit) of true->max(0,Fit);false->Fit end).
 -include("utils.hrl").
 
 init(GenoType)when is_record(GenoType,actuator)->
@@ -20,30 +20,53 @@ handle_call({set_scape,Scape},_,State)->
 
 terminate(normal,_)->ok.
 
-handle_cast({neuron,_,_,forward_fit,Signal},State)->
+handle_cast({neuron,_,NId,forward_fit,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator{id=Id,vl=Vl,cortexId=CortexId}=GenoType,
-	NewRecv=Recv++Signal,
-	io:fwrite("SIGNAL: ~p~n",[Signal]),
+	#actuator{id=Id,vl=Vl,fanins=Ins,cortexId=CortexId}=GenoType,
+	NewRecv=Recv++[{NId,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
-					{Ret,Flag}=gen_server:call(Scape,{action_fit,NewRecv},infinity),
-					CortexId ! {fit,Id,?NORMFIT(Ret),Flag},
+					OrderedSignals=order(Ins,NewRecv),
+					io:fwrite("SIGNAL: ~p~n",[OrderedSignals]),
+					{Flag,Err,Term}=gen_server:call(Scape,{action_fit,OrderedSignals},infinity),
+					CortexId ! {fit,Id,Flag,?NORMFIT(Err),Term},
 					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}
 			end,
 	{noreply,NewState};
-handle_cast({neuron,_,_,forward_predict,Signal},State)->
-	#state{received=Recv,genotype=GenoType}=State,
-	#actuator{id=Id,vl=Vl,cortexId=CortexId}=GenoType,
-	NewRecv=Recv++Signal,
-	io:fwrite("SIGNAL: ~p~n",[Signal]),
+handle_cast({neuron,_,NId,forward_predict,Signal},State)->
+	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
+	#actuator{id=Id,vl=Vl,funs=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
+	NewRecv=Recv++[{NId,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
-					CortexId ! {predict,Id,NewRecv},
+					OrderedSignals=order(Ins,NewRecv),
+					io:fwrite("SIGNAL: ~p~n",[OrderedSignals]),
+					ProcessedPred=eval_funs(OrderedSignals,Funs),
+					gen_server:call(Scape,{action_predict,ProcessedPred},infinity),
+					CortexId ! {predict,Id,ProcessedPred},
 					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}
 			end,
 	{noreply,NewState}.
+
+order(Ins,Signals)->
+	order(Ins,Signals,[]).
+
+order([],_,Acc)->Acc;
+order([H|T],Signals,Acc)->
+	{H,Signal}=lists:keyfind(H,1,Signals),
+	order(T,Signals,Acc++Signal).
+
+
+%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL AS FIRST ARGUMENT!!!
+eval_funs(Signal,undefined)->Signal;
+eval_funs(Signal,[])->Signal;
+eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
+	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
+	eval_funs(NewSignal,T);
+eval_funs(Signal,[{Fun,ExtraArgs}|T])when is_function(Fun),is_list(ExtraArgs)->
+	NewSignal=erlang:apply(Fun,[Signal|ExtraArgs]),
+	eval_funs(NewSignal,T).

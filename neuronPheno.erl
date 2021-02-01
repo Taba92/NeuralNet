@@ -2,7 +2,7 @@
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
 -export([perturbate/3]).
--record(state,{received,roreceived,oldBias,oldWeights,oldRoWeights,genotype}).
+-record(state,{received,roreceived,oldBias,oldWeights,oldRoWeights,histOut,histSig,genotype}).
 -include("utils.hrl").
 
 init(GenoType)when is_record(GenoType,neuron)->
@@ -59,7 +59,7 @@ handle_cast({ElType,FromLayer,IdFrom,FwdType,Signal},State)when ElType==sensor;E
 						OutPut=af:Af(Dot+Bias),
 						NewGenotype=learn(GenoType,[OutPut],PrunRecv,PrunRoRecv),
 						[gen_server:cast(Pid,{neuron,Layer,Id,FwdType,[OutPut]})||Pid<-Outs++RoOuts],
-						State#state{received=[],roreceived=[],genotype=NewGenotype};
+						State#state{histOut={Dot,OutPut},histSig={PrunRecv,PrunRoRecv},received=[],roreceived=[],genotype=NewGenotype};
 					false->
 						State#state{received=NewRecv,roreceived=NewRoRecv}
 			end,
@@ -109,16 +109,20 @@ perturbate(Val,Sup)->
 		false->Val
 	end.
 perturbate(Val,Min,Max)->
-	Perturbed=(?RAND)*?E+Val,
+	saturate(?RAND*?E+Val,Min,Max).
+
+saturate(Val,Min,Max)->
 	if
-		Perturbed < Min -> Min;
-		Perturbed > Max -> Max;
-		true -> Perturbed
+		Val < Min -> Min;
+		Val > Max -> Max;
+		true -> Val
 	end.
 
+dot(Sig,Weight,_)when length(Sig)/=length(Weight)->
+	error(bad_signal_for_weight);
 dot([],[],Dot)->Dot;
 dot([S|T],[W|K],Acc)->
-	dot(T,K,Acc+S*W).
+	try dot(T,K,Acc+S*W) of Val->Val catch _:_->?RANDCHOOSE([-?SAT_LIMIT,?SAT_LIMIT]) end.
 
 learn(GenoType,Output,Recv,[nil|_])->%è all'inizio,non ho segnali ricorsivi in entrata nel neurone!
 	#neuron{faninsWeights=Ins}=GenoType,

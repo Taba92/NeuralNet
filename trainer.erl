@@ -13,8 +13,38 @@ fit(State,Parameters)when map_get(type,Parameters)==ashc->
 fit(State,Parameters)when map_get(type,Parameters)==eshc->
 	#agent{genotype=Geno,fitness=Fit}=State,
 	AlgoParameters=maps:merge(Parameters,#{curGeno=>null,curFit=>null,bestGeno=>Geno,bestFit=>Fit}),
-	fit_eshc(State,AlgoParameters).
+	fit_eshc(State,AlgoParameters);
+fit(State,Parameters)when map_get(type,Parameters)==backprop->
+	#agent{fitness=Fit}=State,
+	AlgoParameters=maps:merge(Parameters,#{curFit=>Fit}),
+	fit_backprop(State,AlgoParameters).
 
+fit_backprop(State,AlgoParameters)->
+	#agent{cortexId=CortexId}=State,
+	#{cycleBack:=CycleBack,learning:=Learn,tgFit:=TgFit,curFit:=CurFit}=AlgoParameters,
+	case (CycleBack==0) or(CurFit>=TgFit) of
+		true->NewGeno=phenotype:pheno_to_geno(CortexId),
+			NewState=State#agent{genotype=NewGeno,fitness=CurFit},
+			{NewState,NewGeno,CurFit};
+		false->CortexId ! fit_cycle,
+			receive
+				{partial_fitness,_,ExpectedOutput}->
+					backprop(CortexId,Learn,ExpectedOutput),
+					fit_backprop(State,AlgoParameters);
+				{fitness,Fitness,ExpectedOutput}->
+					backprop(CortexId,Learn,ExpectedOutput),
+					case Fitness >=TgFit of
+						true->NewGeno=phenotype:pheno_to_geno(CortexId),
+							NewState=State#agent{genotype=NewGeno,fitness=Fitness},
+							{NewState,NewGeno,Fitness};
+						false->
+						NewAlgoParameters=maps:merge(AlgoParameters,#{cycleBack=>CycleBack-1,curFit=>Fitness}),
+						fit_backprop(State,NewAlgoParameters)
+					end
+			end
+	end.
+
+backprop(_,_,_)->ok.
 
 fit_eshc(State,AlgoParameters)->
 	#agent{scape=Scape,genotype=Genotype,cortexId=CortexId}=State,
@@ -85,8 +115,7 @@ fit_shc(State,AlgoParameters)->
 			NewState=State#agent{genotype=FittedGeno,fitness=CurFit},
 			{NewState,FittedGeno,CurFit};
 		false->
-			CortexId ! fit_cycle,
-			receive {fitness,NewFit}->ok end,
+			NewFit=apply_to_problem(CortexId),
 			NewParameters=case NewFit >= CurFit of
 						true->
 							phenotype:backup_weights(CortexId),
@@ -99,4 +128,12 @@ fit_shc(State,AlgoParameters)->
 							maps:merge(AlgoParameters,#{cycleShc=>CycleShc-1})
 				end,
 			fit_shc(State,NewParameters)
+	end.
+
+
+apply_to_problem(CortexId)->
+	CortexId ! fit_cycle,
+	receive
+		{partial_fitness,_,_}->apply_to_problem(CortexId);
+		{fitness,Fitness,_}->Fitness
 	end.

@@ -1,11 +1,18 @@
 -module(af).
--export([all/0,tanh/1,threshold/1,rectifier/1,sigmund/1]).
+-export([all/0,tanh/1,threshold/1,identity/1,rectifier/1,sigmund/1,derivate/2]).
 -include("utils.hrl").
 
-%all()->[tanh,rectifier,threshold,sigmund].
-all()->[tanh,threshold,sigmund].
+all()->[tanh,rectifier,identity,threshold,sigmund].
 
 threshold(X)->case X<0 of true->0;_->1 end.
 rectifier(X)->max(0,X).
-sigmund(X)->1/(1+math:pow(?E,-1*X)).
-tanh(X)->(math:pow(?E,X)-math:pow(?E,-1*X))/(math:pow(?E,X)+math:pow(?E,-1*X)).
+identity(X)->X.
+sigmund(X)->1/(1+math:pow(?E,-X)).
+tanh(X)->(math:pow(?E,X)-math:pow(?E,-X))/(math:pow(?E,X)+math:pow(?E,-X)).
+
+
+derivate(identity,_)->1;
+derivate(sigmund,X)->sigmund(X)*(1-sigmund(X));
+derivate(tanh,X)->math:pow((1/math:cosh(X)),2);
+derivate(rectifier,X)->case X=<0 of true->0;false->1 end;
+derivate(threshold,X)->case X=<0 of true->0;false->1 end.

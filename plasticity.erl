@@ -14,8 +14,7 @@ random_plasticity(PlastChoiches)->
 		_->NewPlast
 	end.
 
-all()->
-	[none,hebbian,oja,neuromod].
+all()->[none,hebbian,oja,neuromod].
 
 get_plasticity(_,none)->none;
 get_plasticity(Weight,hebbian)->{hebbian,?PLAST(Weight)};
@@ -70,8 +69,10 @@ neuromod(N,Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*(A*InputSignal*Output+
 	[saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-P6].
 
 modulate({Weight,Bias},Sig)->
-	Dot=dot(Weight,Sig,0),
-	[af:tanh(Dot+Bias)].
+	try af:tanh(dot(Weight,Sig,0)+Bias) of
+		Val->[Val]
+	catch _:_->[?SAT_LIMIT]
+	end.
 
 saturate(C,Min,Max)->
 	if
@@ -80,8 +81,8 @@ saturate(C,Min,Max)->
 		true -> C
 	end.
 
-dot(L1,L2)when length(L1)/=length(L2)->[X*Y||X<-L1,Y<-L2];
-dot(L1,L2)->[X*Y||{X,Y}<-lists:zip(L1,L2)].
+dot(L1,L2)when length(L1)/=length(L2)->[try X*Y of Val->Val catch _:_->?SAT_LIMIT end||X<-L1,Y<-L2];
+dot(L1,L2)->[try X*Y of Val->Val catch _:_->?SAT_LIMIT end||{X,Y}<-lists:zip(L1,L2)].
 
 dot([],[],Dot)->Dot;
 dot([S|T],[W|K],Acc)->
