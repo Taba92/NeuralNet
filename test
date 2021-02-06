@@ -6,21 +6,21 @@ main(["evo"])->
 	GenoM=genotype_mutator:mutate(Geno,6,Constraint),
 	io:fwrite("~p~n",[GenoM]);
 main(["fit"]) ->
-	Xor=[[1,1,1,"1"],
-		[0,0,1,"1"],
-		[0,1,0,"0"],
-		[1,0,0,"0"],
-		[0,1,1,"1"],
-		[1,0,1,"1"]],
-	{ok,Pid}=classification:start("test.csv",fun csv:read/1),
-	classification:extract_info(Pid),
-	nn:new(contr,Pid,{ffnn,sigmund,none},{3,2,[]}),
-	nn:fit(contr,#{type=>shc,cycleShc=>1000,tgFit=>0.90},sync),
-	%nn:fit(contr,#{type=>backprop,cycleBack=>100,learning=>0,tgFit=>0.90},sync),
-	%Constraint=none,
-	%nn:fit(contr,#{type=>eshc,mutations=>3,constraint=>Constraint,cycleEshc=>100,cycleShc=>100,tgFit=>0.9},sync),
-	%nn:fit(contr,#{type=>ashc,constraint=>{ffnn,sigmund,hebbian},cycleShc=>100,tgFit=>0.90,cycleAshc=>100},sync).
-	io:fwrite("PRED: ~p~n",[nn:predict(contr,[0,0,0],sync)]),
-	io:fwrite("PRED: ~p~n",[nn:predict(contr,[1,1,0],sync)]).
+	%Dataset="test.csv",
+	Dataset="breast_cancer.csv",
+	{ok,Pid}=classification:start(Dataset,fun csv:read/1,500),
+	Info=classification:extract_info(Pid),
+	io:fwrite("INFO: ~p~n",[Info]),
+	#{mins:=Mins,maxs:=Maxs,avgs:=Avgs,encoding:=Enc}=Info,
+	SensorSpec={30,[],[]},
+	ActuatorSpec={2,[],[{preprocess,mostLikely,[]},{preprocess,decode,[Enc]}]},
+	nn:new(contr,Pid,{ffnn,sigmund,none},{SensorSpec,ActuatorSpec,[30]}),
+	io:fwrite("FITNESS: ~p~n",[nn:fit(contr,#{type=>shc,cycleShc=>100,stepnessNeuron=>50,stepnessWeight=>50,tgFit=>0.90},sync)]),
+	%nn:fit(contr,#{type=>backprop,cycleBack=>1000,learning=>0,tgFit=>0.60},sync),
+	Constraint=none,
+	%io:fwrite("FITNESS: ~p~n",[nn:fit(contr,#{type=>eshc,mutations=>3,stepnessNeuron=>50,stepnessWeight=>50,constraint=>Constraint,cycleEshc=>10,cycleShc=>100,tgFit=>0.60},sync)]),
+	%nn:fit(contr,#{type=>ashc,constraint=>{ffnn,sigmund,none},stepnessNeuron=>50,stepnessWeight=>50,cycleShc=>100,tgFit=>0.90,cycleAshc=>100},sync),
 	%population:new(pop,1,{scape,init,[]},{ffnn,rectifier,hebbian},{2,1,[]}),
 	%population:evolve(pop,20,Constraint,100,0.95).
+	nn:fit_predict(contr).
+

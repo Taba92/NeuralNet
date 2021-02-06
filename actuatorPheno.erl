@@ -2,7 +2,6 @@
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
 -record(state,{scapeId,received,genotype}).
--define(NORMFIT(Fit),case is_number(Fit) of true->max(0,Fit);false->Fit end).
 -include("utils.hrl").
 
 init(GenoType)when is_record(GenoType,actuator)->
@@ -16,20 +15,47 @@ handle_call(dump,_,State)->
 	#state{genotype=GenoType}=State,
 	{reply,GenoType,State};
 handle_call({set_scape,Scape},_,State)->
-	{reply,ok,State#state{scapeId=Scape}}.
+	{reply,ok,State#state{scapeId=Scape}};
+handle_call({set_directives,fit,Directives},_,State)->
+	#state{genotype=GenoType}=State,
+	#actuator{fit_directives=Fit}=GenoType,
+	NewGeno=GenoType#actuator{fit_directives=Fit++Directives},
+	{reply,ok,State#state{genotype=NewGeno}};
+handle_call({set_directives,real,Directives},_,State)->
+	#state{genotype=GenoType}=State,
+	#actuator{real_directives=Real}=GenoType,
+	NewGeno=GenoType#actuator{real_directives=Real++Directives},
+	{reply,ok,State#state{genotype=NewGeno}}.
+
 
 terminate(normal,_)->ok.
 
 handle_cast({neuron,_,NId,forward_fit,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator{id=Id,vl=Vl,fanins=Ins,cortexId=CortexId}=GenoType,
+	#actuator{id=Id,vl=Vl,fit_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
 	NewRecv=Recv++[{NId,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
-					OrderedSignals=order(Ins,NewRecv),
-					io:fwrite("SIGNAL: ~p~n",[OrderedSignals]),
-					{Flag,Err,Term}=gen_server:call(Scape,{action_fit,OrderedSignals},infinity),
-					CortexId ! {fit,Id,Flag,?NORMFIT(Err),Term},
+					OrderedSignal=order(Ins,NewRecv),
+					ProcessedSignal=eval_funs(OrderedSignal,Funs),
+					io:fwrite("SIGNAL: ~p~n",[ProcessedSignal]),
+					{Tag,Msg}=gen_server:call(Scape,{action_fit,ProcessedSignal},infinity),
+					CortexId ! {fit,Id,Tag,Msg},
+					State#state{received=[]};
+				false->
+					State#state{received=NewRecv}
+			end,
+	{noreply,NewState};
+handle_cast({neuron,_,NId,forward_fit_predict,Signal},State)->
+	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
+	#actuator{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
+	NewRecv=Recv++[{NId,Signal}],
+	NewState=case length(NewRecv)==Vl of
+				true->
+					OrderedSignal=order(Ins,NewRecv),
+					ProcessedSignal=eval_funs(OrderedSignal,Funs),
+					{Tag,Msg}=gen_server:call(Scape,{action_fit_predict,ProcessedSignal},infinity),
+					CortexId ! {fit_predict,Id,Tag,Msg},
 					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}
@@ -37,13 +63,12 @@ handle_cast({neuron,_,NId,forward_fit,Signal},State)->
 	{noreply,NewState};
 handle_cast({neuron,_,NId,forward_predict,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator{id=Id,vl=Vl,funs=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
+	#actuator{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
 	NewRecv=Recv++[{NId,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
-					OrderedSignals=order(Ins,NewRecv),
-					io:fwrite("SIGNAL: ~p~n",[OrderedSignals]),
-					ProcessedPred=eval_funs(OrderedSignals,Funs),
+					OrderedSignal=order(Ins,NewRecv),
+					ProcessedPred=eval_funs(OrderedSignal,Funs),
 					gen_server:call(Scape,{action_predict,ProcessedPred},infinity),
 					CortexId ! {predict,Id,ProcessedPred},
 					State#state{received=[]};
@@ -62,7 +87,6 @@ order([H|T],Signals,Acc)->
 
 
 %%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL AS FIRST ARGUMENT!!!
-eval_funs(Signal,undefined)->Signal;
 eval_funs(Signal,[])->Signal;
 eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
 	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),

@@ -31,26 +31,61 @@ handle_info({predict_cycle,Signal},State)->
 	Sync=fun(Sensor)->gen_server:cast(Sensor,{sync_predict,Signal}) end,
 	lists:foreach(Sync,SensorsIds),
 	{noreply,State};
-handle_info({fit,Id,finish,Fitness,Term},State)->
+handle_info(fit_predict_cycle,State)->
+	#state{genotype=GenoType}=State,
+	#cortex{sensorsIds=SensorsIds}=GenoType,
+	Sync=fun(Sensor)->gen_server:cast(Sensor,sync_fit_predict) end,
+	lists:foreach(Sync,SensorsIds),
+	{noreply,State};
+handle_info({fit,Id,finish,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
 	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
 	NewRecv=Recv++[Id],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
+					#{fitness:=Fitness}=Msg,
 					io:fwrite("FITNESS: ~p~n",[Fitness]),
 					io:fwrite("---------------------------------~n"),
-					Control ! {fitness,Fitness,Term},
+					Control ! {fit_finish,Msg},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
 			end,
 	{noreply,NewState};
-handle_info({fit,Id,another,Fitness,Term},State)->
+handle_info({fit,Id,another,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
 	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
 	NewRecv=Recv++[Id],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					Control ! {partial_fitness,Fitness,Term},
+					Control ! {fit_another,Msg},
+					State#state{received=[]};
+				false->State#state{received=NewRecv}
+			end,
+	{noreply,NewState};
+handle_info({fit_predict,Id,finish,Msg},State)->
+	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
+	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
+	NewRecv=Recv++[Id],
+	NewState=case length(NewRecv)==length(ActuatorsIds) of
+				true->
+					#{target:=Target,predict:=Predict}=Msg,
+					io:fwrite("VALUE PREDICT: ~p TRUE VALUE: ~p~n",[Predict,Target]),
+					Control ! fit_predict_finish,
+					State#state{received=[]};
+				false->State#state{received=NewRecv}
+			end,
+	{noreply,NewState};
+handle_info({fit_predict,Id,another,Msg},State)->
+	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
+	#cortex{sensorsIds=SensorsIds,actuatorsIds=ActuatorsIds}=GenoType,
+	NewRecv=Recv++[Id],
+	NewState=case length(NewRecv)==length(ActuatorsIds) of
+				true->
+					#{target:=Target,predict:=Predict}=Msg,
+					io:fwrite("VALUE PREDICT: ~p TRUE VALUE: ~p~n",[Predict,Target]),
+					Sync=fun(Sensor)->gen_server:cast(Sensor,sync_fit_predict) end,
+					lists:foreach(Sync,SensorsIds),
+					%Control ! {fit_predict_another,Msg},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
 			end,

@@ -13,19 +13,21 @@ get_actuators_ids(Genotype)->#genotype{actuators=Actuators}=Genotype,[Act#actuat
 get_ids(Genotype)->get_sensors_ids(Genotype)++get_neurons_ids(Genotype)++get_actuators_ids(Genotype)++[get_cortex_id(Genotype)].
 get_geno_spec(Genotype)->
 	#genotype{sensors=[S],actuators=[A]}=Genotype,
-	{S#sensor.vl,A#actuator.vl,lists:droplast(get_layers(Genotype))}.
+	#sensor{vl=SVl,fit_directives=SFit,real_directives=SReal}=S,
+	#actuator{vl=AVl,fit_directives=AFit,real_directives=AReal}=A,
+	{{SVl,SFit,SReal},{AVl,AFit,AReal},lists:droplast(get_layers(Genotype))}.
 
 get_layers(Genotype)->
 	#genotype{neurons=Net}=Genotype,
 	Layer=fun(#neuron{layer=L},Layers)->case L>lists:last(Layers) of true->Layers++[L];false->Layers end end,
 	erlang:tl(lists:foldl(Layer,[0],Net)).
 
-create_NN({rnn,Af,Plast},SensorVl,ActuatorVl,HiddenLayerDensity)->
-	create_NN({{rnn,0},Af,Plast},SensorVl,ActuatorVl,HiddenLayerDensity);
-create_NN(Constraint,SensorVl,ActuatorVl,HiddenLayerDensity) ->
+create_NN({rnn,Af,Plast},SensorSpec,ActuatorSpec,HiddenLayerDensity)->
+	create_NN({{rnn,0},Af,Plast},SensorSpec,ActuatorSpec,HiddenLayerDensity);
+create_NN(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{ActuatorVl,AFitDirectives,ARealDirectives},HiddenLayerDensity) ->
 	LayerDensity=HiddenLayerDensity++[ActuatorVl],
-	Sensor=#sensor{id=?GETID,vl=SensorVl},
-	Actuator=#actuator{id=?GETID,vl=ActuatorVl},
+	Sensor=#sensor{id=?GETID,vl=SensorVl,fit_directives=SFitDirectives,real_directives=SRealDirectives},
+	Actuator=#actuator{id=?GETID,vl=ActuatorVl,fit_directives=AFitDirectives,real_directives=ARealDirectives},
 	{ConnSensor,Net,ConnActuator}=create_neuro_net(Constraint,{Sensor,[],Actuator},LayerDensity,1),
 	SensorsIds=[SId||#sensor{id=SId}<-[Sensor]],
 	NetIds=[NId||#neuron{id=NId}<-Net],

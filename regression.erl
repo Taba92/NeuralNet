@@ -1,4 +1,4 @@
--module(classification).
+-module(regression).
 -export([start/2,start/3,extract_info/1,init/1,handle_call/3,is_finished/1]).
 -record(state,{type,readed,current,numRead,limit,funRead,dataset,info,errAcc}).
 -define(EXTRACT(Record),lists:split(length(Record)-1,Record)).
@@ -56,15 +56,14 @@ handle_call(sense,_,State)when State#state.type==file->
 handle_call({action_fit,Predict},_,State)when State#state.type==list->
 	#state{readed=Readed,current=Record,numRead=Num,limit=Limit,info=MapInfo,dataset=Dataset,errAcc=ErrAcc}=State,
 	{_,Target}=?EXTRACT(Record),
-	#{encoding:=Cod,len:=Len,num_features:=NumFeat}=MapInfo,
-	{Target,Encoding}=lists:keyfind(Target,1,Cod),
-	Error = list_compare(Predict,Encoding,0,NumFeat),
+	#{len:=Len,num_features:=NumFeat}=MapInfo,
+	Error = list_compare(Predict,Target,0,NumFeat),
 	case Dataset of
 		[] ->
 			MSE = ErrAcc+Error,
 			Fitness = 1-MSE/Len,
 			NewState=State#state{readed=[],dataset=Dataset++Readed++[Record],numRead=0,errAcc=0},
-			Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Encoding,predict=>Predict},
+			Msg=#{type=>regression,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Target,predict=>Predict},
 			{reply,{finish,Msg},NewState};
 		_ ->
 			case Num==Limit of
@@ -72,20 +71,19 @@ handle_call({action_fit,Predict},_,State)when State#state.type==list->
 					MSE = ErrAcc+Error,
 					Fitness = 1-MSE/Len,
 					NewState=State#state{readed=Readed++[Record],numRead=0,errAcc=0},
-					Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Encoding,predict=>Predict},
+					Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Target,predict=>Predict},
 					{reply,{finish,Msg},NewState};
 				false->
 					NewState=State#state{readed=Readed++[Record],numRead=Num+1,errAcc=ErrAcc+Error},
-					Msg=#{type=>classification,partial_err=>Error,target=>Encoding,predict=>Predict},
+					Msg=#{type=>regression,partial_err=>Error,target=>Target,predict=>Predict},
 					{reply,{another,Msg},NewState}
 			end
 	end;
 handle_call({action_fit,Predict},_,State)when State#state.type==file->
 	#state{current=Record,info=MapInfo,numRead=Num,limit=Limit,dataset=Dataset,errAcc=ErrAcc}=State,
 	{_,Target}=?EXTRACT(Record),
-	#{encoding:=Cod,len:=Len,num_features:=NumFeat}=MapInfo,
-	{Target,Encoding}=lists:keyfind(Target,1,Cod),
-	Error = list_compare(Predict,Encoding,0,NumFeat),
+	#{len:=Len,num_features:=NumFeat}=MapInfo,
+	Error = list_compare(Predict,Target,0,NumFeat),
 	case is_finished(Dataset) of
 		true->
 			MSE = ErrAcc+Error,
@@ -93,7 +91,7 @@ handle_call({action_fit,Predict},_,State)when State#state.type==file->
 			file:position(Dataset,bof),
 			?READ(Dataset),
 			NewState=State#state{numRead=0,errAcc=0},
-			Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Encoding,predict=>Predict},
+			Msg=#{type=>regression,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Target,predict=>Predict},
 			{reply,{finish,Msg},NewState};
 		false ->
 			case Num==Limit of
@@ -101,18 +99,18 @@ handle_call({action_fit,Predict},_,State)when State#state.type==file->
 					MSE = ErrAcc+Error,
 					Fitness = 1-MSE/Len,
 					NewState=State#state{numRead=0,errAcc=0},
-					Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Encoding,predict=>Predict},
+					Msg=#{type=>regression,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Target,predict=>Predict},
 					{reply,{finish,Msg},NewState};
 				false->
 					NewState=State#state{numRead=Num+1,errAcc=ErrAcc+Error},
-					Msg=#{type=>classification,partial_err=>Error,target=>Encoding,predict=>Predict},
+					Msg=#{type=>regression,partial_err=>Error,target=>Target,predict=>Predict},
 					{reply,{another,Msg},NewState}
 			end
 	end;
 handle_call({action_fit_predict,Predict},_,State)when State#state.type==list->
-	#state{readed=Readed,current=Record,info=MapInfo,dataset=Dataset}=State,
+	#state{readed=Readed,current=Record,dataset=Dataset}=State,
 	{_,Target}=?EXTRACT(Record),
-	Msg=#{type=>classification,target=>Target,predict=>Predict},
+	Msg=#{type=>regression,target=>Target,predict=>Predict},
 	case Dataset of
 		[] ->
 			NewState=State#state{readed=[],dataset=Dataset++Readed++[Record]},
@@ -122,9 +120,9 @@ handle_call({action_fit_predict,Predict},_,State)when State#state.type==list->
 			{reply,{another,Msg},NewState}
 	end;
 handle_call({action_fit_predict,Predict},_,State)when State#state.type==file->
-	#state{current=Record,info=MapInfo,dataset=Dataset}=State,
+	#state{current=Record,dataset=Dataset}=State,
 	{_,Target}=?EXTRACT(Record),
-	Msg=#{type=>classification,target=>Target,predict=>Predict},
+	Msg=#{type=>regression,target=>Target,predict=>Predict},
 	case is_finished(Dataset) of
 		true->
 			file:position(Dataset,bof),
@@ -153,24 +151,21 @@ extract(file,Fun,Dataset)->
 	NumFeatures=get_num_features_file(Fun(Line)),
 	Mins=Maxs=lists:duplicate(NumFeatures,none),
 	Sums=Scarti=lists:duplicate(NumFeatures,0),
-	{NewMins,NewMaxs,NewSums,Targets,Len}=extract_file(?READ(Dataset),Dataset,Fun,Mins,Maxs,Sums,[],0),
+	{NewMins,NewMaxs,NewSums,Len}=extract_file(?READ(Dataset),Dataset,Fun,Mins,Maxs,Sums,0),
 	Avgs=[Sum/Len||Sum<-NewSums],
 	file:position(Dataset,bof),
 	?READ(Dataset),
 	Stds=extract_file(?READ(Dataset),Dataset,Fun,Avgs,Scarti,Len),
-	Encoding=preprocess:one_hot(Targets),
-	NumClasses=length(Targets),
-	#{mins=>NewMins,maxs=>NewMaxs,len=>Len,num_features=>NumFeatures,num_classes=>NumClasses,avgs=>Avgs,stds=>Stds,encoding=>Encoding}.
+	#{mins=>NewMins,maxs=>NewMaxs,len=>Len,num_features=>NumFeatures,avgs=>Avgs,stds=>Stds}.
 
-extract_file(eof,_,_,NewMins,NewMaxs,NewSums,NewTargets,NewLen)->{NewMins,NewMaxs,NewSums,NewTargets,NewLen};
-extract_file({ok,<<Line/binary>>},Dataset,Fun,Mins,Maxs,Sums,Targets,Len)->
-	{Features,Target}=?EXTRACT(Fun(Line)),
+extract_file(eof,_,_,NewMins,NewMaxs,NewSums,NewLen)->{NewMins,NewMaxs,NewSums,NewLen};
+extract_file({ok,<<Line/binary>>},Dataset,Fun,Mins,Maxs,Sums,Len)->
+	{Features,_}=?EXTRACT(Fun(Line)),
 	NewMins=extract_min(Features,Mins),
 	NewMaxs=extract_max(Features,Maxs),
 	NewSums=extract_sum(Features,Sums),
-	NewTargets=extract_target(Target,Targets),
 	NewLen=Len+1,
-	extract_file(?READ(Dataset),Dataset,Fun,NewMins,NewMaxs,NewSums,NewTargets,NewLen).
+	extract_file(?READ(Dataset),Dataset,Fun,NewMins,NewMaxs,NewSums,NewLen).
 
 extract_file(eof,_,_,_,NewScarti,Len)->extract_stds(NewScarti,Len);
 extract_file({ok,<<Line/binary>>},Dataset,Fun,Avgs,Scarti,Len)->
@@ -185,22 +180,19 @@ extract(list,Dataset)->
 	NumFeatures=get_num_features_list(Dataset),
 	Mins=Maxs=lists:duplicate(NumFeatures,none),
 	Sums=Scarti=lists:duplicate(NumFeatures,0),
-	{NewMins,NewMaxs,NewSums,Targets,Len}=extract_list(Dataset,Mins,Maxs,Sums,[],0),
+	{NewMins,NewMaxs,NewSums,Len}=extract_list(Dataset,Mins,Maxs,Sums,0),
 	Avgs=[Sum/Len||Sum<-NewSums],
 	Stds=extract_list(Dataset,Avgs,Scarti,Len),
-	Encoding=preprocess:one_hot(Targets),
-	NumClasses=length(Targets),
-	#{mins=>NewMins,maxs=>NewMaxs,len=>Len,num_features=>NumFeatures,num_classes=>NumClasses,avgs=>Avgs,stds=>Stds,encoding=>Encoding}.
+	#{mins=>NewMins,maxs=>NewMaxs,len=>Len,num_features=>NumFeatures,avgs=>Avgs,stds=>Stds}.
 
-extract_list([],NewMins,NewMaxs,NewSums,NewTargets,NewLen)->{NewMins,NewMaxs,NewSums,NewTargets,NewLen};
-extract_list([Record|Dataset],Mins,Maxs,Sums,Targets,Len)->
-	{Features,Target}=?EXTRACT(Record),
+extract_list([],NewMins,NewMaxs,NewSums,NewLen)->{NewMins,NewMaxs,NewSums,NewLen};
+extract_list([Record|Dataset],Mins,Maxs,Sums,Len)->
+	{Features,_}=?EXTRACT(Record),
 	NewMins=extract_min(Features,Mins),
 	NewMaxs=extract_max(Features,Maxs),
 	NewSums=extract_sum(Features,Sums),
-	NewTargets=extract_target(Target,Targets),
 	NewLen=Len+1,
-	extract_list(Dataset,NewMins,NewMaxs,NewSums,NewTargets,NewLen).
+	extract_list(Dataset,NewMins,NewMaxs,NewSums,NewLen).
 
 extract_list([],_,NewScarti,Len)->extract_stds(NewScarti,Len);
 extract_list([Record|Dataset],Avgs,Scarti,Len)->
@@ -231,11 +223,6 @@ extract_sum(Signal,Sums)->extract_sum(Signal,Sums,[]).
 extract_sum([],[],NewSums)->NewSums;
 extract_sum([H|T],[ActualSum|Sums],Acc)->extract_sum(T,Sums,Acc++[H+ActualSum]).
 
-extract_target(Target,Targets)->
-	case lists:member(Target,Targets) of
-		true->Targets;
-		false->Targets++[Target]
-	end.
 
 extract_scarti(Signal,Avgs,Scarti)->extract_scarti(Signal,Avgs,Scarti,[]).
 extract_scarti([],[],[],NewScarti)->NewScarti;

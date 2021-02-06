@@ -7,7 +7,7 @@ all()->[tanh,rectifier,identity,threshold,sigmund].
 threshold(X)->case X<0 of true->0;_->1 end.
 rectifier(X)->max(0,X).
 identity(X)->X.
-sigmund(X)->1/(1+math:pow(?E,-X)).
+sigmund(X)->try 1/(1+math:pow(?E,-X)) of Val->Val catch _:_->0 end.
 tanh(X)->(math:pow(?E,X)-math:pow(?E,-X))/(math:pow(?E,X)+math:pow(?E,-X)).
 
 

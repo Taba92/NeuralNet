@@ -25,12 +25,12 @@ handle_call(restore_weights,_,State)->
 	#state{oldBias=OldBias,oldWeights=OldWeights,oldRoWeights=OldRoWeights,genotype=GenoType}=State,
 	NewGenotype=GenoType#neuron{bias=OldBias,faninsWeights=OldWeights,roinsWeights=OldRoWeights},
 	{reply,ok,State#state{genotype=NewGenotype}};
-handle_call({perturb_weights,NNSize},_,State)->
+handle_call({perturb_weights,Prob,StepW},_,State)->
 	#state{genotype=GenoType}=State,
 	#neuron{bias=Bias,faninsWeights=Ins,roinsWeights=RoIns}=GenoType,
-	NewState=case ?PROB(math:sqrt(NNSize)) of
+	NewState=case ?PROB(Prob) of
 				true->
-					Sup=math:sqrt(length(Ins)+length(RoIns)),
+					Sup=(length(Ins)+length(RoIns)+1)*StepW/100,
 					NewBias=perturbate(Bias,Sup),
 					FanIns=[perturbate_weight(Weight,Sup)||Weight<-Ins],
 					RoInsW=[perturbate_weight(RoWeight,Sup)||RoWeight<-RoIns],
@@ -109,7 +109,7 @@ perturbate(Val,Sup)->
 		false->Val
 	end.
 perturbate(Val,Min,Max)->
-	saturate(?RAND*?E+Val,Min,Max).
+	saturate(?RAND*?SAT_LIMIT+Val,Min,Max).
 
 saturate(Val,Min,Max)->
 	if

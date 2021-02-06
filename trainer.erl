@@ -83,8 +83,8 @@ fit_ashc(State,AlgoParameters)->
 			NewState=State#agent{genotype=BestGeno,fitness=BestFit},
 			{NewState,BestGeno,BestFit};
 		false->
-			{SVl,AVl,HiddenLayers}=genotype:get_geno_spec(Genotype),
-			NewGeno=genotype:create_NN(Constraint,SVl,AVl,HiddenLayers),
+			{SensorSpec,ActuatorSpec,HiddenLayers}=genotype:get_geno_spec(Genotype),
+			NewGeno=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,HiddenLayers),
 			phenotype:stop_phenotype(CortexId),
 			phenotype:geno_to_pheno(NewGeno),
 			NewCortexId=genotype:get_cortex_id(NewGeno),
@@ -106,8 +106,8 @@ fit_ashc(State,AlgoParameters)->
 	end.
 
 fit_shc(State,AlgoParameters)->
-	#agent{cortexId=CortexId}=State,
-	#{curGeno:=Geno,curFit:=CurFit,cycleShc:=CycleShc,tgFit:=TgFit}=AlgoParameters,
+	#agent{scape=Scape,cortexId=CortexId}=State,
+	#{curGeno:=Geno,curFit:=CurFit,stepnessNeuron:=StepN,stepnessWeight:=StepW,cycleShc:=CycleShc,tgFit:=TgFit}=AlgoParameters,
 	#genotype{neurons=Neurons}=Geno,
 	case (CycleShc==0) or (CurFit>=TgFit) of
 		true->
@@ -115,16 +115,18 @@ fit_shc(State,AlgoParameters)->
 			NewState=State#agent{genotype=FittedGeno,fitness=CurFit},
 			{NewState,FittedGeno,CurFit};
 		false->
+			gen_server:call(Scape,reset),
 			NewFit=apply_to_problem(CortexId),
+			Prob=length(Neurons)*StepN/100,
 			NewParameters=case NewFit >= CurFit of
 						true->
 							phenotype:backup_weights(CortexId),
-							phenotype:perturb_weights({CortexId,length(Neurons)}),
+							phenotype:perturb_weights({CortexId,Prob,StepW}),
 							maps:merge(AlgoParameters,#{curFit=>NewFit,cycleShc=>CycleShc-1});
 						false->
 							phenotype:restore_weights(CortexId),
 							phenotype:backup_weights(CortexId),
-							phenotype:perturb_weights({CortexId,length(Neurons)}),
+							phenotype:perturb_weights({CortexId,Prob,StepW}),
 							maps:merge(AlgoParameters,#{cycleShc=>CycleShc-1})
 				end,
 			fit_shc(State,NewParameters)
@@ -134,6 +136,6 @@ fit_shc(State,AlgoParameters)->
 apply_to_problem(CortexId)->
 	CortexId ! fit_cycle,
 	receive
-		{partial_fitness,_,_}->apply_to_problem(CortexId);
-		{fitness,Fitness,_}->Fitness
+		{fit_another,_}->apply_to_problem(CortexId);
+		{fit_finish,#{fitness:=Fitness}}->Fitness
 	end.

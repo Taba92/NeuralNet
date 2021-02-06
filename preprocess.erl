@@ -33,7 +33,7 @@ encode(Value,Encoding)->
 		false->no_label_encoding
 	end.
 
-mostLikely(Predict)->%used in classification, given a vector of probabilities, it will set to one the mosto likely
+mostLikely(Predict)->%used in classification, given a vector of probabilities, it will set to one the most likely class
 	MostProb=lists:max(Predict),
 	A=fun(Prob,{Class,Find})->case (Prob==MostProb) and (Find/=true) of
 								true->{Class++[1],true};

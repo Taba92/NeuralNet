@@ -41,10 +41,10 @@ backup_weights(CortexId)->
 	[gen_server:call(Pid,backup_weights,infinity)||Pid<-NeuronsIds],
 	ok.
 
-perturb_weights({CortexId,NNSize})->
+perturb_weights({CortexId,Prob,StepW})->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
 	#cortex{neuronsIds=NeuronsIds}=CortexGeno,
-	[gen_server:call(Pid,{perturb_weights,NNSize},infinity)||Pid<-NeuronsIds],
+	[gen_server:call(Pid,{perturb_weights,Prob,StepW},infinity)||Pid<-NeuronsIds],
 	ok.
 
 restore_weights(CortexId)->
