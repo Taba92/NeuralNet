@@ -1,6 +1,7 @@
 -module(preprocess).
--export([one_hot/1,label/1,decode/2,encode/2,mostLikely/1]).
+-export([one_hot/1,label/1,decode/2,encode/2,mostLikely/1,softmax/1]).
 -export([min_max_global/4,min_max_local/2,mean_global/4,mean_local/1,standardization_global/3,standardization_local/1]).
+-include("utils.hrl").
 
 one_hot(Targets)when is_list(Targets)->
 	one_hot(Targets,length(Targets),1,[]).
@@ -43,6 +44,9 @@ mostLikely(Predict)->%used in classification, given a vector of probabilities, i
 	{Label,_}=lists:foldl(A,{[],false},Predict),
 	Label.
 
+softmax(Vector)when is_list(Vector)->
+	Den=lists:sum([math:pow(?E,X)||X<-Vector]),
+	[math:pow(?E,X)/Den||X<-Vector].
 
 min_max_global(Record,Mins,Maxs,{A,B})when is_list(Record),is_list(Mins),is_list(Maxs),A<B->
 	min_max(Record,Mins,Maxs,{A,B},[]).

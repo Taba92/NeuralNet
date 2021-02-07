@@ -1,5 +1,5 @@
 -module(classification).
--export([start/2,start/3,extract_info/1,init/1,handle_call/3,is_finished/1]).
+-export([start/2,start/3,extract_info/1,init/1,handle_call/3,is_finished/1,set_limit/2]).
 -record(state,{type,readed,current,numRead,limit,funRead,dataset,info,errAcc}).
 -define(EXTRACT(Record),lists:split(length(Record)-1,Record)).
 -define(READ(File),file:read_line(File)).
@@ -9,13 +9,14 @@
 start(Dataset,Limit)->gen_server:start(?MODULE,[Dataset,Limit],[]).
 start(Dataset,Fun,Limit)when is_function(Fun)->gen_server:start(?MODULE,[Dataset,Fun,Limit],[]).
 extract_info(ScapeId)->gen_server:call(ScapeId,extract_info,infinity).
+set_limit(ScapeId,Limit)->gen_server:call(ScapeId,{set_limit,Limit},infinity).
 
-init([DatasetPath,Fun,Limit])when is_function(Fun)->
+init([DatasetPath,Fun])when is_function(Fun)->
 	{ok,Dataset}=file:open(DatasetPath,[read,raw,binary,{read_ahead,200000}]),
-	State=#state{type=file,dataset=Dataset,numRead=0,limit=Limit,funRead=Fun,errAcc=0},
+	State=#state{type=file,dataset=Dataset,numRead=0,funRead=Fun,errAcc=0},
 	{ok,State};
-init([Dataset,Limit])->
-	State=#state{type=list,readed=[],numRead=0,limit=Limit,dataset=Dataset,errAcc=0},
+init([Dataset])->
+	State=#state{type=list,readed=[],numRead=0,dataset=Dataset,errAcc=0},
 	{ok,State}.
 
 handle_call(extract_info,_,State)when State#state.type==list->
@@ -28,6 +29,8 @@ handle_call(extract_info,_,State)when State#state.type==file->
 	file:position(Dataset,bof),
 	?READ(Dataset),
 	{reply,MapInfo,State#state{info=MapInfo}};
+handle_call({set_limit,Limit},_,State)->
+	{reply,ok,State#state{limit=round(Limit)}};
 handle_call(reset,_,State)when State#state.type==list->
 	#state{readed=Readed,current=Record,dataset=Dataset}=State,
 	NewState=case Record of
@@ -110,7 +113,7 @@ handle_call({action_fit,Predict},_,State)when State#state.type==file->
 			end
 	end;
 handle_call({action_fit_predict,Predict},_,State)when State#state.type==list->
-	#state{readed=Readed,current=Record,info=MapInfo,dataset=Dataset}=State,
+	#state{readed=Readed,current=Record,dataset=Dataset}=State,
 	{_,Target}=?EXTRACT(Record),
 	Msg=#{type=>classification,target=>Target,predict=>Predict},
 	case Dataset of
@@ -122,7 +125,7 @@ handle_call({action_fit_predict,Predict},_,State)when State#state.type==list->
 			{reply,{another,Msg},NewState}
 	end;
 handle_call({action_fit_predict,Predict},_,State)when State#state.type==file->
-	#state{current=Record,info=MapInfo,dataset=Dataset}=State,
+	#state{current=Record,dataset=Dataset}=State,
 	{_,Target}=?EXTRACT(Record),
 	Msg=#{type=>classification,target=>Target,predict=>Predict},
 	case is_finished(Dataset) of

@@ -22,20 +22,17 @@ handle_call({controller_id,Id},_,State)->
 handle_info(fit_cycle,State)->
 	#state{genotype=GenoType}=State,
 	#cortex{sensorsIds=SensorsIds}=GenoType,
-	Sync=fun(Sensor)->gen_server:cast(Sensor,sync_fit) end,
-	lists:foreach(Sync,SensorsIds),
+	[gen_server:cast(Sensor,sync_fit)||Sensor<-SensorsIds],
 	{noreply,State};
 handle_info({predict_cycle,Signal},State)->
 	#state{genotype=GenoType}=State,
 	#cortex{sensorsIds=SensorsIds}=GenoType,
-	Sync=fun(Sensor)->gen_server:cast(Sensor,{sync_predict,Signal}) end,
-	lists:foreach(Sync,SensorsIds),
+	[gen_server:cast(Sensor,{sync_predict,Signal})||Sensor<-SensorsIds],
 	{noreply,State};
 handle_info(fit_predict_cycle,State)->
 	#state{genotype=GenoType}=State,
 	#cortex{sensorsIds=SensorsIds}=GenoType,
-	Sync=fun(Sensor)->gen_server:cast(Sensor,sync_fit_predict) end,
-	lists:foreach(Sync,SensorsIds),
+	[gen_server:cast(Sensor,sync_fit_predict)||Sensor<-SensorsIds],
 	{noreply,State};
 handle_info({fit,Id,finish,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
@@ -83,8 +80,7 @@ handle_info({fit_predict,Id,another,Msg},State)->
 				true->
 					#{target:=Target,predict:=Predict}=Msg,
 					io:fwrite("VALUE PREDICT: ~p TRUE VALUE: ~p~n",[Predict,Target]),
-					Sync=fun(Sensor)->gen_server:cast(Sensor,sync_fit_predict) end,
-					lists:foreach(Sync,SensorsIds),
+					[gen_server:cast(Sensor,sync_fit_predict)||Sensor<-SensorsIds],
 					%Control ! {fit_predict_another,Msg},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
