@@ -1,6 +1,6 @@
 -module(classification).
 -export([start/2,start/3,extract_info/1,init/1,handle_call/3,is_finished/1,set_limit/2]).
--record(state,{type,readed,current,numRead,limit,funRead,dataset,info,errAcc}).
+-record(state,{type,readed,current,numRead,limit,funRead,dataset,info,fitAcc}).
 -define(EXTRACT(Record),lists:split(length(Record)-1,Record)).
 -define(READ(File),file:read_line(File)).
 -include("utils.hrl").
@@ -13,10 +13,10 @@ set_limit(ScapeId,Limit)->gen_server:call(ScapeId,{set_limit,Limit},infinity).
 
 init([DatasetPath,Fun])when is_function(Fun)->
 	{ok,Dataset}=file:open(DatasetPath,[read,raw,binary,{read_ahead,200000}]),
-	State=#state{type=file,dataset=Dataset,numRead=0,funRead=Fun,errAcc=0},
+	State=#state{type=file,dataset=Dataset,numRead=0,funRead=Fun,fitAcc=0},
 	{ok,State};
 init([Dataset])->
-	State=#state{type=list,readed=[],numRead=0,dataset=Dataset,errAcc=0},
+	State=#state{type=list,readed=[],numRead=0,dataset=Dataset,fitAcc=0},
 	{ok,State}.
 
 handle_call(extract_info,_,State)when State#state.type==list->
@@ -34,15 +34,15 @@ handle_call({set_limit,Limit},_,State)->
 handle_call(reset,_,State)when State#state.type==list->
 	#state{readed=Readed,current=Record,dataset=Dataset}=State,
 	NewState=case Record of
-				undefined->State#state{readed=[],current=undefined,dataset=Dataset++Readed,numRead=0,errAcc=0};
-				_->State#state{readed=[],current=undefined,dataset=Dataset++Readed++[Record],numRead=0,errAcc=0}
+				undefined->State#state{readed=[],current=undefined,dataset=Dataset++Readed,numRead=0,fitAcc=0};
+				_->State#state{readed=[],current=undefined,dataset=Dataset++Readed++[Record],numRead=0,fitAcc=0}
 			end,
 	{reply,ok,NewState};
 handle_call(reset,_,State) when State#state.type==file->
 	#state{dataset=Dataset}=State,
 	file:position(Dataset,bof),
 	?READ(Dataset),
-	NewState=State#state{readed=[],current=undefined,numRead=0,errAcc=0},
+	NewState=State#state{readed=[],current=undefined,numRead=0,fitAcc=0},
 	{reply,ok,NewState};
 handle_call(sense,_,State)when State#state.type==list->
 	#state{dataset=[Record|T]}=State,
@@ -57,58 +57,54 @@ handle_call(sense,_,State)when State#state.type==file->
 	NewState=State#state{current=Record},
 	{reply,Features,NewState};
 handle_call({action_fit,Predict},_,State)when State#state.type==list->
-	#state{readed=Readed,current=Record,numRead=Num,limit=Limit,info=MapInfo,dataset=Dataset,errAcc=ErrAcc}=State,
+	#state{readed=Readed,current=Record,numRead=Num,limit=Limit,info=MapInfo,dataset=Dataset,fitAcc=FitAcc}=State,
 	{_,Target}=?EXTRACT(Record),
-	#{encoding:=Cod,len:=Len,num_features:=NumFeat}=MapInfo,
+	#{encoding:=Cod,len:=Len}=MapInfo,
 	{Target,Encoding}=lists:keyfind(Target,1,Cod),
-	Error = list_compare(Predict,Encoding,0,NumFeat),
+	PartialFit = ?NORMFIT((1-error_fun(Predict,Encoding))),
 	case Dataset of
 		[] ->
-			MSE = ErrAcc+Error,
-			Fitness = 1-MSE/Len,
-			NewState=State#state{readed=[],dataset=Dataset++Readed++[Record],numRead=0,errAcc=0},
-			Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Encoding,predict=>Predict},
+			Fitness =(FitAcc+PartialFit)/Len,
+			NewState=State#state{readed=[],dataset=Dataset++Readed++[Record],numRead=0,fitAcc=0},
+			Msg=#{type=>classification,partial_fit=>PartialFit,fitness=>Fitness,target=>Encoding,predict=>Predict},
 			{reply,{finish,Msg},NewState};
 		_ ->
 			case Num==Limit of
 				true->
-					MSE = ErrAcc+Error,
-					Fitness = 1-MSE/Len,
-					NewState=State#state{readed=Readed++[Record],numRead=0,errAcc=0},
-					Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Encoding,predict=>Predict},
+					Fitness =(FitAcc+PartialFit)/Len,
+					NewState=State#state{readed=Readed++[Record],numRead=0,fitAcc=0},
+					Msg=#{type=>classification,partial_fit=>PartialFit,fitness=>Fitness,target=>Encoding,predict=>Predict},
 					{reply,{finish,Msg},NewState};
 				false->
-					NewState=State#state{readed=Readed++[Record],numRead=Num+1,errAcc=ErrAcc+Error},
-					Msg=#{type=>classification,partial_err=>Error,target=>Encoding,predict=>Predict},
+					NewState=State#state{readed=Readed++[Record],numRead=Num+1,fitAcc=FitAcc+PartialFit},
+					Msg=#{type=>classification,partial_fit=>PartialFit,target=>Encoding,predict=>Predict},
 					{reply,{another,Msg},NewState}
 			end
 	end;
 handle_call({action_fit,Predict},_,State)when State#state.type==file->
-	#state{current=Record,info=MapInfo,numRead=Num,limit=Limit,dataset=Dataset,errAcc=ErrAcc}=State,
+	#state{current=Record,info=MapInfo,numRead=Num,limit=Limit,dataset=Dataset,fitAcc=FitAcc}=State,
 	{_,Target}=?EXTRACT(Record),
-	#{encoding:=Cod,len:=Len,num_features:=NumFeat}=MapInfo,
+	#{encoding:=Cod,len:=Len}=MapInfo,
 	{Target,Encoding}=lists:keyfind(Target,1,Cod),
-	Error = list_compare(Predict,Encoding,0,NumFeat),
+	PartialFit = ?NORMFIT((1-error_fun(Predict,Encoding))),
 	case is_finished(Dataset) of
 		true->
-			MSE = ErrAcc+Error,
-			Fitness = 1-MSE/Len,
+			Fitness =(FitAcc+PartialFit)/Len,
 			file:position(Dataset,bof),
 			?READ(Dataset),
-			NewState=State#state{numRead=0,errAcc=0},
-			Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Encoding,predict=>Predict},
+			NewState=State#state{numRead=0,fitAcc=0},
+			Msg=#{type=>classification,partial_fit=>PartialFit,fitness=>Fitness,target=>Encoding,predict=>Predict},
 			{reply,{finish,Msg},NewState};
 		false ->
 			case Num==Limit of
 				true->
-					MSE = ErrAcc+Error,
-					Fitness = 1-MSE/Len,
-					NewState=State#state{numRead=0,errAcc=0},
-					Msg=#{type=>classification,partial_err=>Error,fitness=>?NORMFIT(Fitness),target=>Encoding,predict=>Predict},
+					Fitness =(FitAcc+PartialFit)/Len,
+					NewState=State#state{numRead=0,fitAcc=0},
+					Msg=#{type=>classification,partial_fit=>PartialFit,fitness=>Fitness,target=>Encoding,predict=>Predict},
 					{reply,{finish,Msg},NewState};
 				false->
-					NewState=State#state{numRead=Num+1,errAcc=ErrAcc+Error},
-					Msg=#{type=>classification,partial_err=>Error,target=>Encoding,predict=>Predict},
+					NewState=State#state{numRead=Num+1,fitAcc=FitAcc+PartialFit},
+					Msg=#{type=>classification,partial_fit=>PartialFit,target=>Encoding,predict=>Predict},
 					{reply,{another,Msg},NewState}
 			end
 	end;
@@ -139,10 +135,19 @@ handle_call({action_fit_predict,Predict},_,State)when State#state.type==file->
 handle_call({action_predict,_},_,State)->{reply,ok,State}.
 
 
-list_compare([X|List1],[Y|List2],ErrorAcc,Num)->
+error_fun(V1,V2)->manhattan(V1,V2).
+manhattan(V1,V2)->manhattan(V1,V2,0,length(V1)).
+manhattan([X|List1],[Y|List2],ErrorAcc,Num)->
 	PartialError=erlang:abs(X-Y),
-	list_compare(List1,List2,ErrorAcc+PartialError,Num);
-list_compare([],[],ErrorAcc,Num)->erlang:abs(ErrorAcc)/Num.
+	manhattan(List1,List2,ErrorAcc+PartialError,Num);
+manhattan([],[],ErrorAcc,Num)->ErrorAcc/Num.
+
+euclidean(V1,V2)->euclidean(V1,V2,0).
+euclidean([X|List1],[Y|List2],ErrorAcc)->
+	PartialError=math:pow(X-Y,2),
+	euclidean(List1,List2,ErrorAcc+PartialError);
+euclidean([],[],ErrorAcc)->math:sqrt(ErrorAcc).
+
 
 %%FOR FILE 
 

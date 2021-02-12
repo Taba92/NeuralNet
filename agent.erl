@@ -50,7 +50,7 @@ handle_call({predict,Signal},_,State)->
 	{reply,Prediction,State};	
 handle_call({fit,Params},_,State)->
 	%io:fwrite("GENO FITTING: ~p~n",[State#agent.genotype]),
-	{NewState,_,Fitness}=trainer:fit(State,Params),
-	{reply,Fitness,NewState};
+	NewState=trainer:fit(State,Params),
+	{reply,NewState#agent.fitness,NewState};
 handle_call(get,_,State)->
 	{reply,State,State}.

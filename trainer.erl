@@ -3,102 +3,89 @@
 -include("utils.hrl").
 
 fit(State,Parameters)when map_get(type,Parameters)==shc->
-	#agent{genotype=Geno,fitness=Fit}=State,
-	AlgoParameters=maps:merge(Parameters,#{curGeno=>Geno,curFit=>Fit}),
-	fit_shc(State,AlgoParameters);
+	fit_shc(State,Parameters);
 fit(State,Parameters)when map_get(type,Parameters)==ashc->
 	#agent{genotype=Geno,fitness=Fit}=State,
-	AlgoParameters=maps:merge(Parameters,#{curGeno=>null,curFit=>null,bestGeno=>Geno,bestFit=>Fit}),
+	AlgoParameters=maps:merge(Parameters,#{bestGeno=>Geno,bestFit=>Fit}),
 	fit_ashc(State,AlgoParameters);
 fit(State,Parameters)when map_get(type,Parameters)==eshc->
 	#agent{genotype=Geno,fitness=Fit}=State,
-	AlgoParameters=maps:merge(Parameters,#{curGeno=>null,curFit=>null,bestGeno=>Geno,bestFit=>Fit}),
+	AlgoParameters=maps:merge(Parameters,#{bestGeno=>Geno,bestFit=>Fit}),
 	fit_eshc(State,AlgoParameters).
 
 fit_eshc(State,AlgoParameters)->
-	#agent{scape=Scape,genotype=Genotype,cortexId=CortexId}=State,
 	#{cycleEshc:=CycleEshc,mutations:=NMut,constraint:=Constraint,tgFit:=TgFit,bestGeno:=BestGeno,bestFit:=BestFit}=AlgoParameters,
 	case (CycleEshc==0) or (BestFit>=TgFit) of
 		true->
-			NewState=State#agent{genotype=BestGeno,fitness=BestFit},
-			{NewState,BestGeno,BestFit};
+			State#agent{genotype=BestGeno,fitness=BestFit};
 		false->
-			NewGeno=genotype_mutator:mutate(Genotype,NMut,Constraint),
-			phenotype:stop_phenotype(CortexId),
-			phenotype:geno_to_pheno(NewGeno),
-			NewCortexId=genotype:get_cortex_id(NewGeno),
-			NewState=phenotype:link_to_cortex(State,NewCortexId),
-			phenotype:link_nn_to_scape(NewGeno,Scape),
-			NewAlgoParameters=maps:merge(AlgoParameters,#{curGeno=>NewGeno,curFit=>0}),
-			{_,FittedNewGeno,NewFitness}=fit_shc(NewState,NewAlgoParameters),
-			case NewFitness > BestFit of
+			FittedState=fit_shc(State,AlgoParameters),
+			#agent{scape=Scape,genotype=FittedGeno,fitness=Fitness,cortexId=CortexId}=FittedState,
+			case Fitness > BestFit of
 				true->
-					NewParams=maps:merge(NewAlgoParameters,#{bestGeno=>FittedNewGeno,bestFit=>NewFitness,cycleEshc=>CycleEshc-1}),
-					fit_eshc(NewState,NewParams);
+					NewParams=maps:merge(AlgoParameters,#{bestGeno=>FittedGeno,bestFit=>Fitness,cycleEshc=>CycleEshc-1}),
+					fit_eshc(FittedState,NewParams);
 				false->
-					phenotype:geno_to_pheno(BestGeno),
+					NewGeno=genotype_mutator:mutate(FittedGeno,NMut,Constraint),
+					phenotype:stop_phenotype(CortexId),
+					phenotype:geno_to_pheno(NewGeno),
+					NewCortexId=genotype:get_cortex_id(NewGeno),
 					NewState=phenotype:link_to_cortex(State,NewCortexId),
-					phenotype:link_nn_to_scape(BestGeno,Scape),
-					NewParams=maps:merge(NewAlgoParameters,#{cycleEshc=>CycleEshc-1}),
-					fit_eshc(State,NewParams)
+					phenotype:link_nn_to_scape(NewGeno,Scape),
+					NewParams=maps:merge(AlgoParameters,#{cycleEshc=>CycleEshc-1}),
+					fit_eshc(NewState#agent{genotype=NewGeno,fitness=0},NewParams)
 			end
 	end.
 
 fit_ashc(State,AlgoParameters)->
-	#agent{scape=Scape,genotype=Genotype,cortexId=CortexId}=State,
 	#{cycleAshc:=CycleAshc,constraint:=Constraint,tgFit:=TgFit,bestGeno:=BestGeno,bestFit:=BestFit}=AlgoParameters,
 	case (CycleAshc==0) or (BestFit>=TgFit) of
 		true->
-			NewState=State#agent{genotype=BestGeno,fitness=BestFit},
-			{NewState,BestGeno,BestFit};
+			State#agent{genotype=BestGeno,fitness=BestFit};
 		false->
-			{SensorSpec,ActuatorSpec,HiddenLayers}=genotype:get_geno_spec(Genotype),
-			NewGeno=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,HiddenLayers),
-			phenotype:stop_phenotype(CortexId),
-			phenotype:geno_to_pheno(NewGeno),
-			NewCortexId=genotype:get_cortex_id(NewGeno),
-			NewState=phenotype:link_to_cortex(State,NewCortexId),
-			phenotype:link_nn_to_scape(NewGeno,Scape),
-			NewAlgoParameters=maps:merge(AlgoParameters,#{curGeno=>NewGeno,curFit=>0}),
-			{_,FittedNewGeno,NewFitness}=fit_shc(NewState,NewAlgoParameters),
-			case NewFitness > BestFit of
+			FittedState=fit_shc(State,AlgoParameters),
+			#agent{scape=Scape,genotype=FittedGeno,fitness=Fitness,cortexId=CortexId}=FittedState,
+			case Fitness > BestFit of
 				true->
-					NewParams=maps:merge(NewAlgoParameters,#{bestGeno=>FittedNewGeno,bestFit=>NewFitness,cycleAshc=>CycleAshc-1}),
-					fit_ashc(NewState,NewParams);
+					NewParams=maps:merge(AlgoParameters,#{bestGeno=>FittedGeno,bestFit=>Fitness,cycleAshc=>CycleAshc-1}),
+					fit_ashc(FittedState,NewParams);
 				false->
-					phenotype:geno_to_pheno(BestGeno),
+					{SensorSpec,ActuatorSpec,HiddenLayers}=genotype:get_geno_spec(FittedGeno),
+					NewGeno=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,HiddenLayers),
+					phenotype:stop_phenotype(CortexId),
+					phenotype:geno_to_pheno(NewGeno),
+					NewCortexId=genotype:get_cortex_id(NewGeno),
 					NewState=phenotype:link_to_cortex(State,NewCortexId),
-					phenotype:link_nn_to_scape(BestGeno,Scape),
-					NewParams=maps:merge(NewAlgoParameters,#{cycleAshc=>CycleAshc-1}),
-					fit_ashc(State,NewParams)
+					phenotype:link_nn_to_scape(NewGeno,Scape),
+					NewParams=maps:merge(AlgoParameters,#{cycleAshc=>CycleAshc-1}),
+					fit_ashc(NewState#agent{genotype=NewGeno,fitness=0},NewParams)
 			end
 	end.
 
 fit_shc(State,AlgoParameters)->
-	#agent{scape=Scape,cortexId=CortexId}=State,
-	#{curGeno:=Geno,curFit:=CurFit,stepnessNeuron:=StepN,stepnessWeight:=StepW,cycleShc:=CycleShc,tgFit:=TgFit}=AlgoParameters,
+	#agent{scape=Scape,genotype=Geno,cortexId=CortexId,fitness=CurFit}=State,
+	#{stepnessNeuron:=StepN,stepnessWeight:=StepW,cycleShc:=CycleShc,tgFit:=TgFit}=AlgoParameters,
 	#genotype{neurons=Neurons}=Geno,
 	case (CycleShc==0) or (CurFit>=TgFit) of
 		true->
 			FittedGeno=phenotype:pheno_to_geno(CortexId),
-			NewState=State#agent{genotype=FittedGeno,fitness=CurFit},
-			{NewState,FittedGeno,CurFit};
+			State#agent{genotype=FittedGeno};
 		false->
 			gen_server:call(Scape,reset),
 			NewFit=apply_to_problem(CortexId),
 			Prob=length(Neurons)*StepN/100,
-			NewParameters=case NewFit >= CurFit of
+			{NewState,NewParameters}=case NewFit >= CurFit of
 						true->
 							phenotype:backup_weights(CortexId),
 							phenotype:perturb_weights({CortexId,Prob,StepW}),
-							maps:merge(AlgoParameters,#{curFit=>NewFit,cycleShc=>CycleShc-1});
+							{State#agent{fitness=NewFit},maps:merge(AlgoParameters,#{cycleShc=>CycleShc-1})};
 						false->
 							phenotype:restore_weights(CortexId),
 							phenotype:backup_weights(CortexId),
 							phenotype:perturb_weights({CortexId,Prob,StepW}),
-							maps:merge(AlgoParameters,#{cycleShc=>CycleShc-1})
+							{State,maps:merge(AlgoParameters,#{cycleShc=>CycleShc-1})}
 				end,
-			fit_shc(State,NewParameters)
+			fit_shc(NewState,NewParameters)
 	end.
 
 

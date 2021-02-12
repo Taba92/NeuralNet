@@ -1,7 +1,6 @@
 -module(neuronPheno).
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
--export([perturbate/3]).
 -record(state,{received,roreceived,oldBias,oldWeights,oldRoWeights,histOut,histSig,genotype}).
 -include("utils.hrl").
 
@@ -31,11 +30,9 @@ handle_call({perturb_weights,Prob,StepW},_,State)->
 	NewState=case ?PROB(Prob) of
 				true->
 					Sup=(length(Ins)+length(RoIns)+1)*StepW/100,
-					NewBias=perturbate(Bias,Sup),
-					FanIns=[perturbate_weight(Weight,Sup)||Weight<-Ins],
-					RoInsW=[perturbate_weight(RoWeight,Sup)||RoWeight<-RoIns],
-					NewFanIns=[perturbate_plast(Weight,Sup)||Weight<-FanIns],
-					NewRoIns=[perturbate_plast(RoWeight,Sup)||RoWeight<-RoInsW],
+					NewBias=perturbate_bias(Bias,Sup),
+					NewFanIns=[perturbate_weight(Weight,Sup)||Weight<-Ins],
+					NewRoIns=[perturbate_weight(RoWeight,Sup)||RoWeight<-RoIns],
 					NewGenoType=GenoType#neuron{bias=NewBias,faninsWeights=NewFanIns,roinsWeights=NewRoIns},
 					State#state{genotype=NewGenoType};
 				false->State
@@ -81,41 +78,19 @@ aggregate([{Id,Signal}|T],Weight,Acc)->
 	aggregate(T,Weight,Acc+dot(Signal,W,Acc)).
 	
 
-perturbate_plast({Id,Weight,Mod},Sup)->
+perturbate_weight({Id,Weight,Modulator},Sup)->
 	case ?PROB(Sup) of
-		true->{Id,Weight,plast_perturb(Mod,length(Weight))};
-		false->{Id,Weight,Mod}
+		true->{Id,perturbate_vals(Weight),Modulator};
+		false->{Id,Weight,Modulator}
 	end.
 
-plast_perturb(none,_)->none;
-plast_perturb({hebbian,Vals},Sup)->{hebbian,perturbate_vals(Vals,Sup)};
-plast_perturb({oja,Vals},Sup)->{oja,perturbate_vals(Vals,Sup)};
-plast_perturb({neuromod,N,Vals},Sup)->{neuromod,N,[perturbate_vals(Val,Sup)||Val<-Vals]}.
+perturbate_vals([])->[];
+perturbate_vals([H|T])->[utils:perturbate(H)|perturbate_vals(T)].
 
-perturbate_weight({Id,Weight,Mod},Sup)->
+perturbate_bias(Val,Sup)->
 	case ?PROB(Sup) of
-		true->{Id,perturbate_vals(Weight,length(Weight)),Mod};
-		false->{Id,Weight,Mod}
-	end.
-
-perturbate_vals([],_)->[];
-perturbate_vals({L,B},Sup)->{perturbate_vals(L,Sup),perturbate(B,Sup)};
-perturbate_vals([H|T],Sup)->
-	[perturbate(H,Sup)|perturbate_vals(T,Sup)].
-
-perturbate(Val,Sup)->
-	case ?PROB(Sup) of
-		true->perturbate(Val,-?SAT_LIMIT,?SAT_LIMIT);
+		true->utils:perturbate(Val);
 		false->Val
-	end.
-perturbate(Val,Min,Max)->
-	saturate(?RAND*?SAT_LIMIT+Val,Min,Max).
-
-saturate(Val,Min,Max)->
-	if
-		Val < Min -> Min;
-		Val > Max -> Max;
-		true -> Val
 	end.
 
 dot(Sig,Weight,_)when length(Sig)/=length(Weight)->

@@ -48,14 +48,14 @@ hebbian(Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*InputSignal*Output
 	A=dot(Sig,Output),
 	B=dot(LearnParams,A),
 	C=sum(Weight,B),
-	[saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-C].
+	[utils:saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-C].
 
 oja(Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*Output*(InputSignal–O*W(t))
 	A=sub(Sig,dot(Weight,Output)),
 	B=dot(Output,A),
 	C=dot(LearnParams,B),
 	D=sum(Weight,C),
-	[saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-D].
+	[utils:saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-D].
 
 neuromod(N,Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*(A*InputSignal*Output+B*InputSignal+C*Output+D),
 	{Modulator,NotModulator}=lists:split(N,LearnParams),
@@ -66,19 +66,12 @@ neuromod(N,Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*(A*InputSignal*Output+
 	P4=sum(P1,sum(P2,sum(P3,D))),
 	P5=dot(H,P4),
 	P6=sum(Weight,P5),
-	[saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-P6].
+	[utils:saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-P6].
 
 modulate({Weight,Bias},Sig)->
 	try af:tanh(dot(Weight,Sig,0)+Bias) of
 		Val->[Val]
 	catch _:_->[?SAT_LIMIT]
-	end.
-
-saturate(C,Min,Max)->
-	if
-		C < Min ->Min;
-		C > Max -> Max;
-		true -> C
 	end.
 
 dot(L1,L2)when length(L1)/=length(L2)->[try X*Y of Val->Val catch _:_->?SAT_LIMIT end||X<-L1,Y<-L2];

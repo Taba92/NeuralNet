@@ -69,8 +69,8 @@ mutate_weights(Genotype,_)->
 	#genotype{neurons=Neurons}=Genotype,
 	Neuron=?RANDCHOOSE(Neurons),
 	RemainNeurons=Neurons--[Neuron],
-    NewIns=[{Id,[neuronPheno:perturbate(W,-?SAT_LIMIT,?SAT_LIMIT)||W<-Weight],M}||{Id,Weight,M}<-Neuron#neuron.faninsWeights],
-	NewRoIns=[{Id,[neuronPheno:perturbate(W,-?SAT_LIMIT,?SAT_LIMIT)||W<-Weight],M}||{Id,Weight,M}<-Neuron#neuron.roinsWeights],
+    NewIns=[{Id,[utils:perturbate(W)||W<-Weight],M}||{Id,Weight,M}<-Neuron#neuron.faninsWeights],
+	NewRoIns=[{Id,[utils:perturbate(W)||W<-Weight],M}||{Id,Weight,M}<-Neuron#neuron.roinsWeights],
 	MutatedNeuron=Neuron#neuron{faninsWeights=NewIns,roinsWeights=NewRoIns},
 	Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}.
 
@@ -88,7 +88,7 @@ mutate_bias(Genotype,_)->
 	#genotype{neurons=Neurons}=Genotype,
 	Neuron=?RANDCHOOSE(Neurons),
 	RemainNeurons=Neurons--[Neuron],
-	MutatedNeuron=Neuron#neuron{bias=neuronPheno:perturbate(Neuron#neuron.bias,-?SAT_LIMIT,?SAT_LIMIT)},
+	MutatedNeuron=Neuron#neuron{bias=utils:perturbate(Neuron#neuron.bias)},
 	Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}.
 
 mutate_af(Genotype,Constraint)->

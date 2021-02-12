@@ -1,11 +1,10 @@
--define(GETID,list_to_atom(integer_to_list(logger:timestamp()+erlang:unique_integer([positive,monotonic])))).
--define(RAND,(rand:uniform()-0.5)).
+-define(GETID,utils:get_id()).
+-define(RAND,rand:normal()).
 -define(E,2.71828182845904523536).
--define(RANGE(Sup),case round(math:floor(Sup)) of N when N<1->1;N->N end).
--define(PROB(Sup),1==rand:uniform(?RANGE(Sup))).
+-define(PROB(Sup),utils:prob_on(Sup)).
 -define(SAT_LIMIT,math:pi()*2).
--define(RANDCHOOSE(List),lists:nth(rand:uniform(length(List)),List)).
--define(NORMFIT(Fit),case is_number(Fit) of true->max(0,Fit);false->Fit end).
+-define(RANDCHOOSE(List),utils:randchoose(List)).
+-define(NORMFIT(Fit),utils:normalize_fit(Fit)).
 
 -record(population,{id,agents=[]}).
 -record(agent,{id,scape,cortexId,genotype,fitness}).
