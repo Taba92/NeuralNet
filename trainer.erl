@@ -88,7 +88,6 @@ fit_shc(State,AlgoParameters)->
 			fit_shc(NewState,NewParameters)
 	end.
 
-
 apply_to_problem(CortexId)->
 	CortexId ! fit_cycle,
 	receive

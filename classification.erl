@@ -1,8 +1,7 @@
 -module(classification).
 -export([start/2,start/3,extract_info/1,init/1,handle_call/3,is_finished/1,set_limit/2]).
--record(state,{type,readed,current,numRead,limit,funRead,dataset,info,fitAcc}).
--define(EXTRACT(Record),lists:split(length(Record)-1,Record)).
--define(READ(File),file:read_line(File)).
+-record(state,{type,readed,current,numRead,limit,funRead,dataset,info,matrix,loss}).
+-define(METRICS,classification_metrics).
 -include("utils.hrl").
 -include_lib("kernel/include/file.hrl").
 
@@ -13,36 +12,40 @@ set_limit(ScapeId,Limit)->gen_server:call(ScapeId,{set_limit,Limit},infinity).
 
 init([DatasetPath,Fun])when is_function(Fun)->
 	{ok,Dataset}=file:open(DatasetPath,[read,raw,binary,{read_ahead,200000}]),
-	State=#state{type=file,dataset=Dataset,numRead=0,funRead=Fun,fitAcc=0},
+	State=#state{type=file,dataset=Dataset,numRead=0,funRead=Fun,loss=0},
 	{ok,State};
 init([Dataset])->
-	State=#state{type=list,readed=[],numRead=0,dataset=Dataset,fitAcc=0},
+	State=#state{type=list,readed=[],numRead=0,dataset=Dataset,loss=0},
 	{ok,State}.
 
 handle_call(extract_info,_,State)when State#state.type==list->
 	#state{dataset=Dataset}=State,
 	MapInfo=extract(list,Dataset),
-	{reply,MapInfo,State#state{info=MapInfo}};
+	Matrix=?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
+	{reply,MapInfo,State#state{info=MapInfo,matrix=Matrix}};
 handle_call(extract_info,_,State)when State#state.type==file->
 	#state{funRead=Fun,dataset=Dataset}=State,
 	MapInfo=extract(file,Fun,Dataset),
 	file:position(Dataset,bof),
 	?READ(Dataset),
-	{reply,MapInfo,State#state{info=MapInfo}};
+	Matrix=?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
+	{reply,MapInfo,State#state{info=MapInfo,matrix=Matrix}};
 handle_call({set_limit,Limit},_,State)->
 	{reply,ok,State#state{limit=round(Limit)}};
 handle_call(reset,_,State)when State#state.type==list->
-	#state{readed=Readed,current=Record,dataset=Dataset}=State,
+	#state{readed=Readed,current=Record,dataset=Dataset,info=MapInfo}=State,
+	Matrix=?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
 	NewState=case Record of
-				undefined->State#state{readed=[],current=undefined,dataset=Dataset++Readed,numRead=0,fitAcc=0};
-				_->State#state{readed=[],current=undefined,dataset=Dataset++Readed++[Record],numRead=0,fitAcc=0}
+				undefined->State#state{readed=[],current=undefined,dataset=Dataset++Readed,numRead=0,matrix=Matrix,loss=0};
+				_->State#state{readed=[],current=undefined,dataset=Dataset++Readed++[Record],numRead=0,matrix=Matrix,loss=0}
 			end,
 	{reply,ok,NewState};
 handle_call(reset,_,State) when State#state.type==file->
-	#state{dataset=Dataset}=State,
+	#state{dataset=Dataset,info=MapInfo}=State,
 	file:position(Dataset,bof),
 	?READ(Dataset),
-	NewState=State#state{readed=[],current=undefined,numRead=0,fitAcc=0},
+	Matrix=?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
+	NewState=State#state{readed=[],current=undefined,numRead=0,matrix=Matrix,loss=0},
 	{reply,ok,NewState};
 handle_call(sense,_,State)when State#state.type==list->
 	#state{dataset=[Record|T]}=State,
@@ -57,54 +60,68 @@ handle_call(sense,_,State)when State#state.type==file->
 	NewState=State#state{current=Record},
 	{reply,Features,NewState};
 handle_call({action_fit,Predict},_,State)when State#state.type==list->
-	#state{readed=Readed,current=Record,numRead=Num,limit=Limit,info=MapInfo,dataset=Dataset,fitAcc=FitAcc}=State,
+	#state{readed=Readed,current=Record,numRead=Num,limit=Limit,info=MapInfo,dataset=Dataset,matrix=Matrix,loss=LossAcc}=State,
 	{_,Target}=?EXTRACT(Record),
-	#{encoding:=Cod,len:=Len}=MapInfo,
-	{Target,Encoding}=lists:keyfind(Target,1,Cod),
-	PartialFit = ?NORMFIT((1-error_fun(Predict,Encoding))),
+	#{encoding:=Cod,len:=Len,classes:=Classes}=MapInfo,
+	Encode=preprocess:encode(Target,Cod),
+	PartialLoss=?METRICS:cross_entropy(Encode,Predict),
+	PartialFit=1-?METRICS:manhattan_avg(Encode,Predict),
+	ClassChoose=preprocess:decode(preprocess:mostLikely(Predict),Cod),
+	UpdateMatrix=?METRICS:incr_cell_matrix(Target,ClassChoose,Matrix),
 	case Dataset of
 		[] ->
-			Fitness =(FitAcc+PartialFit)/Len,
-			NewState=State#state{readed=[],dataset=Dataset++Readed++[Record],numRead=0,fitAcc=0},
-			Msg=#{type=>classification,partial_fit=>PartialFit,fitness=>Fitness,target=>Encoding,predict=>Predict},
+			Fitness =?METRICS:f1_score_avg(Classes,UpdateMatrix),
+			Loss=(PartialLoss+LossAcc)/Len,
+			NewMatrix=?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
+			NewState=State#state{readed=[],dataset=Dataset++Readed++[Record],numRead=0,matrix=NewMatrix,loss=0},
+			Msg=#{type=>classification,partial_fit=>PartialFit,partial_loss=>PartialLoss,loss=>Loss,fitness=>Fitness,target=>Encode,predict=>Predict},
 			{reply,{finish,Msg},NewState};
 		_ ->
 			case Num==Limit of
 				true->
-					Fitness =(FitAcc+PartialFit)/Len,
-					NewState=State#state{readed=Readed++[Record],numRead=0,fitAcc=0},
-					Msg=#{type=>classification,partial_fit=>PartialFit,fitness=>Fitness,target=>Encoding,predict=>Predict},
+					Fitness =?METRICS:f1_score_avg(Classes,UpdateMatrix),
+					Loss=(PartialLoss+LossAcc)/Len,
+					NewMatrix=?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
+					NewState=State#state{readed=Readed++[Record],numRead=0,matrix=NewMatrix,loss=0},
+					Msg=#{type=>classification,partial_fit=>PartialFit,partial_loss=>PartialLoss,loss=>Loss,fitness=>Fitness,target=>Encode,predict=>Predict},
 					{reply,{finish,Msg},NewState};
 				false->
-					NewState=State#state{readed=Readed++[Record],numRead=Num+1,fitAcc=FitAcc+PartialFit},
-					Msg=#{type=>classification,partial_fit=>PartialFit,target=>Encoding,predict=>Predict},
+					NewState=State#state{readed=Readed++[Record],numRead=Num+1,matrix=UpdateMatrix,loss=LossAcc+PartialLoss},
+					Msg=#{type=>classification,partial_fit=>PartialFit,partial_loss=>PartialLoss,target=>Encode,predict=>Predict},
 					{reply,{another,Msg},NewState}
 			end
 	end;
 handle_call({action_fit,Predict},_,State)when State#state.type==file->
-	#state{current=Record,info=MapInfo,numRead=Num,limit=Limit,dataset=Dataset,fitAcc=FitAcc}=State,
+	#state{current=Record,info=MapInfo,numRead=Num,limit=Limit,dataset=Dataset,matrix=Matrix,loss=LossAcc}=State,
 	{_,Target}=?EXTRACT(Record),
-	#{encoding:=Cod,len:=Len}=MapInfo,
-	{Target,Encoding}=lists:keyfind(Target,1,Cod),
-	PartialFit = ?NORMFIT((1-error_fun(Predict,Encoding))),
+	#{encoding:=Cod,len:=Len,classes:=Classes}=MapInfo,
+	Encode=preprocess:encode(Target,Cod),
+	PartialLoss=?METRICS:cross_entropy(Encode,Predict),
+	PartialFit=1-?METRICS:manhattan_avg(Encode,Predict),
+	ClassChoose=preprocess:decode(preprocess:mostLikely(Predict),Cod),
+	UpdateMatrix=?METRICS:incr_cell_matrix(Target,ClassChoose,Matrix),
 	case is_finished(Dataset) of
 		true->
-			Fitness =(FitAcc+PartialFit)/Len,
+			Fitness =?METRICS:f1_score_avg(Classes,UpdateMatrix),
+			Loss=(PartialLoss+LossAcc)/Len,
+			NewMatrix=?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
 			file:position(Dataset,bof),
 			?READ(Dataset),
-			NewState=State#state{numRead=0,fitAcc=0},
-			Msg=#{type=>classification,partial_fit=>PartialFit,fitness=>Fitness,target=>Encoding,predict=>Predict},
+			NewState=State#state{numRead=0,matrix=NewMatrix,loss=0},
+			Msg=#{type=>classification,partial_fit=>PartialFit,partial_loss=>PartialLoss,loss=>Loss,fitness=>Fitness,target=>Encode,predict=>Predict},
 			{reply,{finish,Msg},NewState};
 		false ->
 			case Num==Limit of
 				true->
-					Fitness =(FitAcc+PartialFit)/Len,
-					NewState=State#state{numRead=0,fitAcc=0},
-					Msg=#{type=>classification,partial_fit=>PartialFit,fitness=>Fitness,target=>Encoding,predict=>Predict},
+					Fitness =?METRICS:f1_score_avg(Classes,UpdateMatrix),
+					Loss=(PartialLoss+LossAcc)/Len,
+					NewMatrix=?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
+					NewState=State#state{numRead=0,matrix=NewMatrix,loss=0},
+					Msg=#{type=>classification,partial_fit=>PartialFit,partial_loss=>PartialLoss,loss=>Loss,fitness=>Fitness,target=>Encode,predict=>Predict},
 					{reply,{finish,Msg},NewState};
 				false->
-					NewState=State#state{numRead=Num+1,fitAcc=FitAcc+PartialFit},
-					Msg=#{type=>classification,partial_fit=>PartialFit,target=>Encoding,predict=>Predict},
+					NewState=State#state{numRead=Num+1,matrix=UpdateMatrix,loss=LossAcc+PartialLoss},
+					Msg=#{type=>classification,target=>Encode,predict=>Predict},
 					{reply,{another,Msg},NewState}
 			end
 	end;
@@ -135,22 +152,7 @@ handle_call({action_fit_predict,Predict},_,State)when State#state.type==file->
 handle_call({action_predict,_},_,State)->{reply,ok,State}.
 
 
-error_fun(V1,V2)->manhattan(V1,V2).
-manhattan(V1,V2)->manhattan(V1,V2,0,length(V1)).
-manhattan([X|List1],[Y|List2],ErrorAcc,Num)->
-	PartialError=erlang:abs(X-Y),
-	manhattan(List1,List2,ErrorAcc+PartialError,Num);
-manhattan([],[],ErrorAcc,Num)->ErrorAcc/Num.
-
-euclidean(V1,V2)->euclidean(V1,V2,0).
-euclidean([X|List1],[Y|List2],ErrorAcc)->
-	PartialError=math:pow(X-Y,2),
-	euclidean(List1,List2,ErrorAcc+PartialError);
-euclidean([],[],ErrorAcc)->math:sqrt(ErrorAcc).
-
-
-%%FOR FILE 
-
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%FOR FILE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 is_finished(Dataset)->
 	{ok,Pos}=file:position(Dataset,cur),
 	{ok,#file_info{size=Size}}=file:read_file_info(Dataset),
@@ -168,7 +170,7 @@ extract(file,Fun,Dataset)->
 	Stds=extract_file(?READ(Dataset),Dataset,Fun,Avgs,Scarti,Len),
 	Encoding=preprocess:one_hot(Targets),
 	NumClasses=length(Targets),
-	#{mins=>NewMins,maxs=>NewMaxs,len=>Len,num_features=>NumFeatures,num_classes=>NumClasses,avgs=>Avgs,stds=>Stds,encoding=>Encoding}.
+	#{mins=>NewMins,maxs=>NewMaxs,len=>Len,num_features=>NumFeatures,num_classes=>NumClasses,classes=>Targets,avgs=>Avgs,stds=>Stds,encoding=>Encoding}.
 
 extract_file(eof,_,_,NewMins,NewMaxs,NewSums,NewTargets,NewLen)->{NewMins,NewMaxs,NewSums,NewTargets,NewLen};
 extract_file({ok,<<Line/binary>>},Dataset,Fun,Mins,Maxs,Sums,Targets,Len)->
@@ -187,8 +189,9 @@ extract_file({ok,<<Line/binary>>},Dataset,Fun,Avgs,Scarti,Len)->
 	extract_file(?READ(Dataset),Dataset,Fun,Avgs,NewScarti,Len).
 
 get_num_features_file(Record)->length(Record)-1.
-%%%%%
-%%FOR LIST
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%FOR LIST%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 extract(list,Dataset)->
 	NumFeatures=get_num_features_list(Dataset),
 	Mins=Maxs=lists:duplicate(NumFeatures,none),
@@ -198,7 +201,7 @@ extract(list,Dataset)->
 	Stds=extract_list(Dataset,Avgs,Scarti,Len),
 	Encoding=preprocess:one_hot(Targets),
 	NumClasses=length(Targets),
-	#{mins=>NewMins,maxs=>NewMaxs,len=>Len,num_features=>NumFeatures,num_classes=>NumClasses,avgs=>Avgs,stds=>Stds,encoding=>Encoding}.
+	#{mins=>NewMins,maxs=>NewMaxs,len=>Len,num_features=>NumFeatures,num_classes=>NumClasses,classes=>Targets,avgs=>Avgs,stds=>Stds,encoding=>Encoding}.
 
 extract_list([],NewMins,NewMaxs,NewSums,NewTargets,NewLen)->{NewMins,NewMaxs,NewSums,NewTargets,NewLen};
 extract_list([Record|Dataset],Mins,Maxs,Sums,Targets,Len)->
@@ -217,7 +220,7 @@ extract_list([Record|Dataset],Avgs,Scarti,Len)->
 	extract_list(Dataset,Avgs,NewScarti,Len).
 
 get_num_features_list([Record|_])->length(Record)-1.
-%%%%
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 extract_min(Signal,Mins)->extract_min(Signal,Mins,[]).
 extract_min([],[],NewMins)->NewMins;
