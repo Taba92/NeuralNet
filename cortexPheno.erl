@@ -35,65 +35,57 @@ handle_cast(fit_predict_cycle,State)->
 	[gen_server:cast(Sensor,sync_fit_predict)||Sensor<-SensorsIds],
 	{noreply,State}.
 
-handle_info({fit,Id,finish,Msg},State)->
+handle_info({fit,Id,Flag,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
-	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
-	NewRecv=Recv++[Id],
+	#cortex{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
+	NewRecv=Recv++[{Id,Msg}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					#{fitness:=Fitness}=Msg,
-					io:fwrite("FITNESS: ~p~n",[Fitness]),
-					io:fwrite("---------------------------------~n"),
-					Control ! {fit_finish,Msg},
+					OrderedMsgs=order(ActuatorsIds,NewRecv),
+					ProcessedMsgs=eval_funs(OrderedMsgs,Funs),
+					Control ! {fit,Flag,ProcessedMsgs},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
 			end,
 	{noreply,NewState};
-handle_info({fit,Id,another,Msg},State)->
+handle_info({fit_predict,Id,Flag,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
-	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
-	NewRecv=Recv++[Id],
+	#cortex{real_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
+	NewRecv=Recv++[{Id,Msg}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					Control ! {fit_another,Msg},
-					State#state{received=[]};
-				false->State#state{received=NewRecv}
-			end,
-	{noreply,NewState};
-handle_info({fit_predict,Id,finish,Msg},State)->
-	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
-	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
-	NewRecv=Recv++[Id],
-	NewState=case length(NewRecv)==length(ActuatorsIds) of
-				true->
-					#{target:=Target,predict:=Predict}=Msg,
-					io:fwrite("VALUE PREDICT: ~p TRUE VALUE: ~p~n",[Predict,Target]),
-					Control ! {fit_predict_finish,Msg},
-					State#state{received=[]};
-				false->State#state{received=NewRecv}
-			end,
-	{noreply,NewState};
-handle_info({fit_predict,Id,another,Msg},State)->
-	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
-	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
-	NewRecv=Recv++[Id],
-	NewState=case length(NewRecv)==length(ActuatorsIds) of
-				true->
-					#{target:=Target,predict:=Predict}=Msg,
-					io:fwrite("VALUE PREDICT: ~p TRUE VALUE: ~p~n",[Predict,Target]),
-					Control ! {fit_predict_another,Msg},
+					OrderedMsgs=order(ActuatorsIds,NewRecv),
+					ProcessedMsgs=eval_funs(OrderedMsgs,Funs),
+					Control ! {fit_predict,Flag,ProcessedMsgs},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
 			end,
 	{noreply,NewState};
 handle_info({predict,Id,Pred},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
-	#cortex{actuatorsIds=ActuatorsIds}=GenoType,
-	NewRecv=Recv++[Id],
+	#cortex{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
+	NewRecv=Recv++[{Id,Pred}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					Control ! {prediction,Pred},
+					OrderedMsgs=order(ActuatorsIds,NewRecv),
+					ProcessedMsgs=eval_funs(OrderedMsgs,Funs),
+					Control ! {prediction,ProcessedMsgs},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
 			end,
 	{noreply,NewState}.
+
+order(List,TupleList)->
+	order(List,TupleList,[]).
+order([],_,Acc)->Acc;
+order([H|T],TupleList,Acc)->
+	{H,Value}=lists:keyfind(H,1,TupleList),
+	order(T,TupleList,Acc++[Value]).
+
+eval_funs(Signal,[])->Signal;
+eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
+	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
+	eval_funs(NewSignal,T);
+eval_funs(Signal,[{Fun,ExtraArgs}|T])when is_function(Fun),is_list(ExtraArgs)->
+	NewSignal=erlang:apply(Fun,[Signal|ExtraArgs]),
+	eval_funs(NewSignal,T).

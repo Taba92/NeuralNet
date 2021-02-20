@@ -8,8 +8,8 @@ new(Name,Genotype)when is_record(Genotype,genotype),is_atom(Name)->
 	new(Name,Genotype,0).
 new(Name,Genotype,Fitness)when is_record(Genotype,genotype),is_atom(Name),is_number(Fitness)->
 	gen_server:start({local,Name},?CONTR,[Name,Genotype,Fitness],[]).
-new(Name,ScapeId,Constraint,{SensorSpec,ActuatorSpec,HiddenLayerDensity})->
-	Genotype=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,HiddenLayerDensity),
+new(Name,ScapeId,Constraint,{SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity})->
+	Genotype=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity),
 	new(Name,Genotype),
 	set_scape(Name,ScapeId).
 

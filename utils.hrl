@@ -15,6 +15,6 @@
 -record(genotype,{sensors,neurons,actuators,cortex}).
 -record(neuron,{id,layer,af,bias,faninsWeights,fanouts,roinsWeights,roouts}).
 -record(sensor,{id,vl,fit_directives,real_directives,fanouts}).
--record(cortex,{id,sensorsIds,neuronsIds,actuatorsIds}).
+-record(cortex,{id,fit_directives,real_directives,sensorsIds,neuronsIds,actuatorsIds}).
 -record(actuator,{id,vl,fit_directives,real_directives,fanins,cortexId}).
 

@@ -67,13 +67,12 @@ handle_cast({neuron,_,NId,forward_predict,Signal},State)->
 			end,
 	{noreply,NewState}.
 
-order(Ins,Signals)->
-	order(Ins,Signals,[]).
-
+order(List,TupleList)->
+	order(List,TupleList,[]).
 order([],_,Acc)->Acc;
-order([H|T],Signals,Acc)->
-	{H,Signal}=lists:keyfind(H,1,Signals),
-	order(T,Signals,Acc++Signal).
+order([H|T],TupleList,Acc)->
+	{H,Value}=lists:keyfind(H,1,TupleList),
+	order(T,TupleList,Acc++Value).
 
 
 %%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL AS FIRST ARGUMENT!!!

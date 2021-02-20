@@ -73,6 +73,7 @@ fit_shc(State,AlgoParameters)->
 		false->
 			gen_server:call(Scape,reset),
 			#{fitness:=NewFit}=utils:apply_to_scape(fit,CortexId),
+			io:fwrite("FITNESS: ~p~n---------------------~n",[NewFit]),
 			Prob=length(Neurons)*StepN/100,
 			{NewState,NewParameters}=case NewFit >= CurFit of
 						true->

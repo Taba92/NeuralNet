@@ -1,5 +1,5 @@
 -module(utils).
--export([prob_on/1,get_id/0,randchoose/1,normalize_fit/1,perturbate/1,saturate/3]).
+-export([prob_on/1,get_id/0,randchoose/1,normalize_fit/1,perturbate/1,saturate/3,order/2]).
 -export([apply_to_scape/2]).
 -include("utils.hrl").
 
@@ -21,15 +21,25 @@ saturate(Val,Min,Max)->
 		true -> Val
 	end.
 
+order(List,TupleList)->
+	order(List,TupleList,[]).
+order([],_,Acc)->Acc;
+order([H|T],TupleList,Acc)->
+	{H,Value}=lists:keyfind(H,1,TupleList),
+	order(T,TupleList,Acc++Value).
+
+
 apply_to_scape(fit,CortexId)->
 	gen_server:cast(CortexId,fit_cycle),
 	receive
-		{fit_another,_}->apply_to_scape(fit,CortexId);
-		{fit_finish,Msg}->Msg
+		{fit,another,_}->apply_to_scape(fit,CortexId);
+		{fit,finish,Msg}->Msg
 	end;
 apply_to_scape(fit_predict,CortexId)->
 	gen_server:cast(CortexId,fit_predict_cycle),
 	receive
-		{fit_predict_another,_}->apply_to_scape(fit_predict,CortexId);
-		{fit_predict_finish,Msg}->Msg
+		{fit_predict,another,Msg}->
+			io:fwrite("~p~n",[Msg]),
+			apply_to_scape(fit_predict,CortexId);
+		{fit_predict,finish,Msg}->io:fwrite("~p~n",[Msg])
 	end.

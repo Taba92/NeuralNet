@@ -1,5 +1,5 @@
 -module(genotype).
--export([create_NN/4]).
+-export([create_NN/5]).
 -export([get_cortex_id/1,get_neurons_ids/1,get_sensors_ids/1,get_actuators_ids/1,get_ids/1]).
 -export([create_neuron/2,create_weight/2,get_layers/1,get_geno_spec/1]).
 -define(LAYER(Neurons),(hd(Neurons))#neuron.layer).
@@ -22,9 +22,9 @@ get_layers(Genotype)->
 	Layer=fun(#neuron{layer=L},Layers)->case L>lists:last(Layers) of true->Layers++[L];false->Layers end end,
 	erlang:tl(lists:foldl(Layer,[0],Net)).
 
-create_NN({rnn,Af,Plast},SensorSpec,ActuatorSpec,HiddenLayerDensity)->
-	create_NN({{rnn,0},Af,Plast},SensorSpec,ActuatorSpec,HiddenLayerDensity);
-create_NN(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{ActuatorVl,AFitDirectives,ARealDirectives},HiddenLayerDensity) ->
+create_NN({rnn,Af,Plast},SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity)->
+	create_NN({{rnn,0},Af,Plast},SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity);
+create_NN(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{ActuatorVl,AFitDirectives,ARealDirectives},{CFitDirectives,CRealDirectives},HiddenLayerDensity) ->
 	LayerDensity=HiddenLayerDensity++[ActuatorVl],
 	Sensor=#sensor{id=?GETID,vl=SensorVl,fit_directives=SFitDirectives,real_directives=SRealDirectives},
 	Actuator=#actuator{id=?GETID,vl=ActuatorVl,fit_directives=AFitDirectives,real_directives=ARealDirectives},
@@ -32,7 +32,7 @@ create_NN(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{ActuatorVl,AFitD
 	SensorsIds=[SId||#sensor{id=SId}<-[Sensor]],
 	NetIds=[NId||#neuron{id=NId}<-Net],
 	ActuatorsIds=[AId||#actuator{id=AId}<-[Actuator]],
-	Cortex=#cortex{id=?GETID,sensorsIds=SensorsIds,neuronsIds=NetIds,actuatorsIds=ActuatorsIds},
+	Cortex=#cortex{id=?GETID,fit_directives=CFitDirectives,real_directives=CRealDirectives,sensorsIds=SensorsIds,neuronsIds=NetIds,actuatorsIds=ActuatorsIds},
 	NewActuator=ConnActuator#actuator{cortexId=Cortex#cortex.id},
 	#genotype{sensors=[ConnSensor],neurons=Net,actuators=[NewActuator],cortex=Cortex}.
 
