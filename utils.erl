@@ -1,5 +1,6 @@
 -module(utils).
 -export([prob_on/1,get_id/0,randchoose/1,normalize_fit/1,perturbate/1,saturate/3]).
+-export([apply_to_scape/2]).
 -include("utils.hrl").
 
 limit(Sup)->case round(math:floor(Sup)) of N when N<1->1;N->N end.
@@ -18,4 +19,17 @@ saturate(Val,Min,Max)->
 		Val < Min -> Min;
 		Val > Max -> Max;
 		true -> Val
+	end.
+
+apply_to_scape(fit,CortexId)->
+	gen_server:cast(CortexId,fit_cycle),
+	receive
+		{fit_another,_}->apply_to_scape(fit,CortexId);
+		{fit_finish,Msg}->Msg
+	end;
+apply_to_scape(fit_predict,CortexId)->
+	gen_server:cast(CortexId,fit_predict_cycle),
+	receive
+		{fit_predict_another,_}->apply_to_scape(fit_predict,CortexId);
+		{fit_predict_finish,Msg}->Msg
 	end.

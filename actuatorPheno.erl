@@ -15,17 +15,7 @@ handle_call(dump,_,State)->
 	#state{genotype=GenoType}=State,
 	{reply,GenoType,State};
 handle_call({set_scape,Scape},_,State)->
-	{reply,ok,State#state{scapeId=Scape}};
-handle_call({set_directives,fit,Directives},_,State)->
-	#state{genotype=GenoType}=State,
-	#actuator{fit_directives=Fit}=GenoType,
-	NewGeno=GenoType#actuator{fit_directives=Fit++Directives},
-	{reply,ok,State#state{genotype=NewGeno}};
-handle_call({set_directives,real,Directives},_,State)->
-	#state{genotype=GenoType}=State,
-	#actuator{real_directives=Real}=GenoType,
-	NewGeno=GenoType#actuator{real_directives=Real++Directives},
-	{reply,ok,State#state{genotype=NewGeno}}.
+	{reply,ok,State#state{scapeId=Scape}}.
 
 
 terminate(normal,_)->ok.
@@ -39,8 +29,8 @@ handle_cast({neuron,_,NId,forward_fit,Signal},State)->
 					OrderedSignal=order(Ins,NewRecv),
 					ProcessedSignal=eval_funs(OrderedSignal,Funs),
 					io:fwrite("SIGNAL: ~p~n",[ProcessedSignal]),
-					{Tag,Msg}=gen_server:call(Scape,{action_fit,ProcessedSignal},infinity),
-					CortexId ! {fit,Id,Tag,Msg},
+					{Flag,Msg}=gen_server:call(Scape,{action_fit,ProcessedSignal},infinity),
+					CortexId ! {fit,Id,Flag,Msg},
 					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}
@@ -54,8 +44,8 @@ handle_cast({neuron,_,NId,forward_fit_predict,Signal},State)->
 				true->
 					OrderedSignal=order(Ins,NewRecv),
 					ProcessedSignal=eval_funs(OrderedSignal,Funs),
-					{Tag,Msg}=gen_server:call(Scape,{action_fit_predict,ProcessedSignal},infinity),
-					CortexId ! {fit_predict,Id,Tag,Msg},
+					{Flag,Msg}=gen_server:call(Scape,{action_fit_predict,ProcessedSignal},infinity),
+					CortexId ! {fit_predict,Id,Flag,Msg},
 					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}

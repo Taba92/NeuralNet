@@ -28,24 +28,13 @@ handle_call({set_scape,ScapeId},_,State)->
 	#agent{genotype=Genotype}=State,
 	phenotype:link_nn_to_scape(Genotype,ScapeId),
 	{reply,ok,State#agent{scape=ScapeId}};
-handle_call({set_directives,actuators,Type,Directives},_,State)->
-	#agent{genotype=Genotype}=State,
-	#genotype{actuators=Acts}=Genotype,
-	[gen_server:call(Id,{set_directives,Type,Directives})||#actuator{id=Id}<-Acts],
-	{reply,ok,State};
-handle_call({set_directives,sensors,Type,Directives},_,State)->
-	#agent{genotype=Genotype}=State,
-	#genotype{sensors=Sensors}=Genotype,
-	[gen_server:call(Id,{set_directives,Type,Directives})||#sensor{id=Id}<-Sensors],
-	{reply,ok,State};
 handle_call(fit_predict,_,State)->
 	#agent{cortexId=CortexId}=State,
-	CortexId ! fit_predict_cycle,
-	receive fit_predict_finish->ok end,
+	utils:apply_to_scape(fit_predict,CortexId),
 	{reply,ok,State};
 handle_call({predict,Signal},_,State)->
 	#agent{cortexId=CortexId}=State,
-	CortexId ! {predict_cycle,Signal},
+	gen_server:cast(CortexId,{predict_cycle,Signal}),
 	receive {prediction,Prediction}->ok end,
 	{reply,Prediction,State};	
 handle_call({fit,Params},_,State)->

@@ -17,17 +17,7 @@ handle_call(dump,_,State)->
 	#state{genotype=GenoType}=State,
 	{reply,GenoType,State};
 handle_call({set_scape,Scape},_,State)->
-	{reply,ok,State#state{scapeId=Scape}};
-handle_call({set_directives,fit,Directives},_,State)->
-	#state{genotype=GenoType}=State,
-	#sensor{fit_directives=Fit}=GenoType,
-	NewGeno=GenoType#sensor{fit_directives=Fit++Directives},
-	{reply,ok,State#state{genotype=NewGeno}};
-handle_call({set_directives,real,Directives},_,State)->
-	#state{genotype=GenoType}=State,
-	#sensor{real_directives=Real}=GenoType,
-	NewGeno=GenoType#sensor{real_directives=Real++Directives},
-	{reply,ok,State#state{genotype=NewGeno}}.
+	{reply,ok,State#state{scapeId=Scape}}.
 
 handle_cast(sync_fit,State)->
 	#state{scapeId=Scape,genotype=GenoType}=State,

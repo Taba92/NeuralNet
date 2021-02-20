@@ -1,7 +1,6 @@
 -module(nn).
 -export([new/2,new/3,new/4,fit/2,fit/3,predict/2,predict/3,get/1,get/2,save_nn_file/2,save_nn_file/3,load_nn_file/2,load_nn_file/3,
 		stop/1,set_scape/2,set_scape/3,fit_predict/1,fit_predict/2]).
--export([set_sensors_directives/3,set_sensors_directives/4,set_actuators_directives/3,set_actuators_directives/4]).
 -define(CONTR,agent).
 -include("utils.hrl").
 
@@ -23,14 +22,6 @@ get(AgentId,async)->gen_server:send_request(AgentId,get).
 set_scape(AgentId,ScapeId)->set_scape(AgentId,ScapeId,sync).
 set_scape(AgentId,ScapeId,sync)when is_atom(ScapeId);is_pid(ScapeId)->gen_server:call(AgentId,{set_scape,ScapeId},infinity);
 set_scape(AgentId,ScapeId,async)when is_atom(ScapeId);is_pid(ScapeId)->gen_server:send_request(AgentId,{set_scape,ScapeId}).
-
-set_sensors_directives(AgentId,Type,Directives)->set_sensors_directives(AgentId,Type,Directives,sync).
-set_sensors_directives(AgentId,Type,Directives,sync)->gen_server:call(AgentId,{set_directives,sensors,Type,Directives},infinity);
-set_sensors_directives(AgentId,Type,Directives,async)->gen_server:send_request(AgentId,{set_directives,sensors,Type,Directives},infinity).
-
-set_actuators_directives(AgentId,Type,Directives)->set_actuators_directives(AgentId,Type,Directives,sync).
-set_actuators_directives(AgentId,Type,Directives,sync)->gen_server:call(AgentId,{set_directives,actuators,Type,Directives},infinity);
-set_actuators_directives(AgentId,Type,Directives,async)->gen_server:send_request(AgentId,{set_directives,actuators,Type,Directives},infinity).
 
 
 fit_predict(AgentId)->fit_predict(AgentId,sync).

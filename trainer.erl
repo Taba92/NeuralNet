@@ -72,7 +72,7 @@ fit_shc(State,AlgoParameters)->
 			State#agent{genotype=FittedGeno};
 		false->
 			gen_server:call(Scape,reset),
-			NewFit=apply_to_problem(CortexId),
+			#{fitness:=NewFit}=utils:apply_to_scape(fit,CortexId),
 			Prob=length(Neurons)*StepN/100,
 			{NewState,NewParameters}=case NewFit >= CurFit of
 						true->
@@ -88,9 +88,3 @@ fit_shc(State,AlgoParameters)->
 			fit_shc(NewState,NewParameters)
 	end.
 
-apply_to_problem(CortexId)->
-	CortexId ! fit_cycle,
-	receive
-		{fit_another,_}->apply_to_problem(CortexId);
-		{fit_finish,#{fitness:=Fitness}}->Fitness
-	end.
