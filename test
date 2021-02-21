@@ -32,7 +32,7 @@ main(["class"]) ->
 	#{mins:=Mins,maxs:=Maxs,avgs:=Avgs,stds:=Stds,num_features:=FeatNum,num_classes:=Classes,len:=Len,encoding:=Enc}=Info,
 	SensorSpec={FeatNum,[{preprocess,standardization_global,[Avgs,Stds]}],[{preprocess,standardization_global,[Avgs,Stds]}]},
 	ActuatorSpec={Classes,[{preprocess,softmax,[]}],[{preprocess,softmax,[]},{preprocess,mostLikely,[]},{preprocess,decode,[Enc]}]},
-	CortexSpec={[{fun(List)->hd(List) end,[]}],[{fun(List)->hd(List) end,[]}]},
+	CortexSpec={[{erlang,hd,[]}],[{erlang,hd,[]}]},
 	classification:set_limit(Pid,Len*85/100),
 	nn:new(contr,Pid,{ffnn,sigmund,none},{SensorSpec,ActuatorSpec,CortexSpec,[4]}),
 	io:fwrite("FITNESS: ~p~n",[nn:fit(contr,#{type=>shc,cycleShc=>300,stepnessNeuron=>40,stepnessWeight=>40,tgFit=>0.80},sync)]),
@@ -41,5 +41,6 @@ main(["class"]) ->
 	%nn:fit(contr,#{type=>ashc,constraint=>{ffnn,sigmund,none},stepnessNeuron=>40,stepnessWeight=>40,cycleShc=>100,tgFit=>0.90,cycleAshc=>10},sync),
 	%population:new(pop,1,{scape,init,[]},{ffnn,rectifier,hebbian},{2,1,[]}),
 	%population:evolve(pop,20,Constraint,100,0.95).
-	nn:fit_predict(contr).
+	nn:fit_predict(contr),
+	nn:predict(contr,[5.7,2.8,4.5,1.3]).
 

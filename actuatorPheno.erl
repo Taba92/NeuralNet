@@ -30,7 +30,7 @@ handle_cast({neuron,_,NId,forward_fit,Signal},State)->
 					ProcessedSignal=eval_funs(OrderedSignal,Funs),
 					io:fwrite("SIGNAL: ~p~n",[ProcessedSignal]),
 					{Flag,Msg}=gen_server:call(Scape,{action_fit,ProcessedSignal},infinity),
-					CortexId ! {fit,Id,Flag,Msg},
+					gen_server:cast(CortexId,{fit,Id,Flag,Msg}),
 					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}
@@ -45,7 +45,7 @@ handle_cast({neuron,_,NId,forward_fit_predict,Signal},State)->
 					OrderedSignal=order(Ins,NewRecv),
 					ProcessedSignal=eval_funs(OrderedSignal,Funs),
 					{Flag,Msg}=gen_server:call(Scape,{action_fit_predict,ProcessedSignal},infinity),
-					CortexId ! {fit_predict,Id,Flag,Msg},
+					gen_server:cast(CortexId,{fit_predict,Id,Flag,Msg}),
 					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}
@@ -60,7 +60,7 @@ handle_cast({neuron,_,NId,forward_predict,Signal},State)->
 					OrderedSignal=order(Ins,NewRecv),
 					ProcessedPred=eval_funs(OrderedSignal,Funs),
 					gen_server:call(Scape,{action_predict,ProcessedPred},infinity),
-					CortexId ! {predict,Id,ProcessedPred},
+					gen_server:cast(CortexId,{predict,Id,ProcessedPred}),
 					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}
@@ -75,7 +75,7 @@ order([H|T],TupleList,Acc)->
 	order(T,TupleList,Acc++Value).
 
 
-%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL AS FIRST ARGUMENT!!!
+%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR(VECTOR OF NUMBERS) AS FIRST ARGUMENT!!!
 eval_funs(Signal,[])->Signal;
 eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
 	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),

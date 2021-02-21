@@ -40,7 +40,7 @@ handle_cast({sync_predict,Signal},State)->
 	[gen_server:cast(Pid,{sensor,0,Id,forward_predict,ProcessedSig})||Pid<-Pids],
 	{noreply,State}.
 
-%%FUNCTIONS USED TO PREPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR AS FIRST ARGUMENT!!!
+%%FUNCTIONS USED TO PREPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR(VECTOR OF NUMBERS) AS FIRST ARGUMENT!!!
 eval_funs(Signal,[])->Signal;
 eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
 	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
