@@ -82,7 +82,7 @@ order([H|T],TupleList,Acc)->
 	{H,Value}=lists:keyfind(H,1,TupleList),
 	order(T,TupleList,Acc++[Value]).
 
-%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE MSGS VECTOR(VECTOR OF MAPS) AS FIRST ARGUMENT!!!
+%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE MSGS VECTOR(VECTOR OF MAPS TIPICAL) AS FIRST ARGUMENT!!!
 eval_funs(Signal,[])->Signal;
 eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
 	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),

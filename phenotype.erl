@@ -18,6 +18,7 @@ geno_to_pheno(GenoType)when is_record(GenoType,genotype)->
 	#genotype{sensors=SensorsGeno,neurons=NetGeno,actuators=ActuatorsGeno,cortex=CortexGeno}=GenoType,
 	[sensorPheno:init(Sensor)||Sensor<-SensorsGeno],
 	[neuronPheno:init(Neuron)||Neuron<-NetGeno],
+	%%[neuron_som:init(Neuron)||Neuron<-NetGeno],
 	[actuatorPheno:init(Actuator)||Actuator<-ActuatorsGeno],
 	cortexPheno:init(CortexGeno).
 

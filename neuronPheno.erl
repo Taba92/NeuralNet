@@ -49,6 +49,7 @@ handle_cast({ElType,FromLayer,IdFrom,FwdType,Signal},State)when ElType==sensor;E
 								true->{Recv,RoRecv++[{IdFrom,Signal}]};
 								false->{Recv++[{IdFrom,Signal}],RoRecv}
 								end,
+	%{PrunRecv,PrunRoRecv}={NewRecv,NewRoRecv},
 	{PrunRecv,PrunRoRecv}={prunSignals(NewRecv,length(Ins)),prunSignals(NewRoRecv,length(RoIns))},%possono esserci segnali doppiati!
 	NewState=case length(PrunRecv)==length(Ins) andalso length(PrunRoRecv)==length(RoIns) of
 		        	true->

@@ -75,7 +75,7 @@ order([H|T],TupleList,Acc)->
 	order(T,TupleList,Acc++Value).
 
 
-%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR(VECTOR OF NUMBERS) AS FIRST ARGUMENT!!!
+%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR(VECTOR OF NUMBERS TIPICAL) AS FIRST ARGUMENT!!!
 eval_funs(Signal,[])->Signal;
 eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
 	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
