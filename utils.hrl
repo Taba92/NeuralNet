@@ -15,6 +15,9 @@
 -record(genotype,{sensors,neurons,actuators,cortex}).
 -record(neuron,{id,layer,af,bias,faninsWeights,fanouts,roinsWeights,roouts}).
 -record(neuron_som,{id,coordinates,af,weight,neighbors,fanouts}).
+%%-record(neuron,{id,af,type,normalInfo,somInfo,fanouts}).
+%%-record(neuron_normal_info,{layer,bias,faninsWeights,roinsWeights,roouts}).
+%%-record(neuron_som_info,{coordinates,weight,neighbors}).
 -record(sensor,{id,vl,fit_directives,real_directives,fanouts}).
 -record(cortex,{id,fit_directives,real_directives,sensorsIds,neuronsIds,actuatorsIds}).
 -record(actuator,{id,vl,fit_directives,real_directives,fanins,cortexId}).

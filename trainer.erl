@@ -11,8 +11,40 @@ fit(State,Parameters)when map_get(type,Parameters)==ashc->
 fit(State,Parameters)when map_get(type,Parameters)==eshc->
 	#agent{genotype=Geno,fitness=Fit}=State,
 	AlgoParameters=maps:merge(Parameters,#{bestGeno=>Geno,bestFit=>Fit}),
-	fit_eshc(State,AlgoParameters).
+	fit_eshc(State,AlgoParameters);
+fit(State,Parameters)when map_get(type,Parameters)==som->
+	fit_som(State,Parameters).
 
+
+%%%FIT ALGORITMHS FOR UNSUPERVISED LEARNING
+fit_som(State,AlgoParameters)->%online update
+	#agent{scape=Scape,genotype=Geno,cortexId=CortexId,fitness=CurFit}=State,
+	#{cycle:=Cycle,learnRate:=LearnRate,neighboorSize:=NeighboorSize}=AlgoParameters,
+	case Cycle==0 of
+		true->
+			FittedGeno=phenotype:pheno_to_geno(CortexId),
+			State#agent{genotype=FittedGeno};
+		false->
+			gen_server:call(Scape,reset),
+			NeuronsIds=genotype:get_neurons_ids(Geno),
+			learn_som(CortexId,NeuronsIds,LearnRate,NeighboorSize),
+			NewParams=#{cycle=>Cycle-1,learnRate=>LearnRate/2,neighboorSize=>NeighboorSize/2},
+			fit_som(State,NewParams)
+	end.
+
+learn_som(CortexId,Neurons,LearnRate,NeighboorSize)->
+	gen_server:cast(CortexId,fit_cycle),
+	receive {fit,Flag,BMU}->ok end,
+	{_,Coord,_}=BMU,
+	[gen_server:call(Id,{update_weight,LearnRate,{utils,gaussian,[Coord,NeighboorSize]}})||Id<-Neurons],
+	case Flag of
+		another->learn_som(CortexId,Neurons,LearnRate,NeighboorSize);
+		finish->ok
+	end.
+%%%
+
+
+%%FIT ALGORITHMS FOR SUPERVISED LEARNING
 fit_eshc(State,AlgoParameters)->
 	#{cycleEshc:=CycleEshc,mutations:=NMut,constraint:=Constraint,tgFit:=TgFit,bestGeno:=BestGeno,bestFit:=BestFit}=AlgoParameters,
 	case (CycleEshc==0) or (BestFit>=TgFit) of

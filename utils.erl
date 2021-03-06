@@ -1,6 +1,6 @@
 -module(utils).
 -export([prob_on/1,get_id/0,randchoose/1,normalize_fit/1,perturbate/1,saturate/3,order/2]).
--export([apply_to_scape/2]).
+-export([apply_to_scape/2,actuator_get_signals/1,gaussian_neighborhood/3]).
 -include("utils.hrl").
 
 limit(Sup)->case round(math:floor(Sup)) of N when N<1->1;N->N end.
@@ -43,3 +43,8 @@ apply_to_scape(fit_predict,CortexId)->
 			apply_to_scape(fit_predict,CortexId);
 		{fit_predict,finish,Msg}->io:fwrite("~p~n",[Msg])
 	end.
+
+%%SOM FUNCTIONS UTILS
+actuator_get_signals(TupleList)->[Value||{_,_,[Value]}<-TupleList].
+gaussian_neighborhood(X,Y,NeighBoorSize)->math:pow(?E,-(af:euclidean(X,Y)/2*math:pow(NeighBoorSize,2))).
+%%%

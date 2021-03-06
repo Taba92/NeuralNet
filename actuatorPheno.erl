@@ -20,10 +20,10 @@ handle_call({set_scape,Scape},_,State)->
 
 terminate(normal,_)->ok.
 
-handle_cast({neuron,_,NId,forward_fit,Signal},State)->
+handle_cast({neuron,Term,NId,forward_fit,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
 	#actuator{id=Id,vl=Vl,fit_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
-	NewRecv=Recv++[{NId,Signal}],
+	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
 					OrderedSignal=order(Ins,NewRecv),
@@ -36,10 +36,10 @@ handle_cast({neuron,_,NId,forward_fit,Signal},State)->
 					State#state{received=NewRecv}
 			end,
 	{noreply,NewState};
-handle_cast({neuron,_,NId,forward_fit_predict,Signal},State)->
+handle_cast({neuron,Term,NId,forward_fit_predict,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
 	#actuator{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
-	NewRecv=Recv++[{NId,Signal}],
+	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
 					OrderedSignal=order(Ins,NewRecv),
@@ -51,10 +51,10 @@ handle_cast({neuron,_,NId,forward_fit_predict,Signal},State)->
 					State#state{received=NewRecv}
 			end,
 	{noreply,NewState};
-handle_cast({neuron,_,NId,forward_predict,Signal},State)->
+handle_cast({neuron,Term,NId,forward_predict,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
 	#actuator{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
-	NewRecv=Recv++[{NId,Signal}],
+	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
 					OrderedSignal=order(Ins,NewRecv),
@@ -67,15 +67,15 @@ handle_cast({neuron,_,NId,forward_predict,Signal},State)->
 			end,
 	{noreply,NewState}.
 
-order(List,TupleList)->
-	order(List,TupleList,[]).
+order(SortList,TupleListToOrder)->
+	order(SortList,TupleListToOrder,[]).
 order([],_,Acc)->Acc;
-order([H|T],TupleList,Acc)->
-	{H,Value}=lists:keyfind(H,1,TupleList),
-	order(T,TupleList,Acc++Value).
+order([H|T],TupleListToOrder,Acc)->
+	{H,Term,Value}=lists:keyfind(H,1,TupleListToOrder),
+	order(T,TupleListToOrder,Acc++[{H,Term,Value}]).
 
 
-%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR(VECTOR OF NUMBERS TIPICAL) AS FIRST ARGUMENT!!!
+%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR(IS A LIST) AS FIRST ARGUMENT!!!
 eval_funs(Signal,[])->Signal;
 eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
 	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),

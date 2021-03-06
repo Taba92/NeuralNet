@@ -5,7 +5,7 @@
 -include("utils.hrl").
 
 init(GenoType)when is_record(GenoType,neuron_som)->
-	#neuron{id=Id}=GenoType,
+	#neuron_som{id=Id}=GenoType,
 	gen_server:start_link({local,Id},?MODULE,[GenoType],[]);
 init([GenoType])->
 	State=#state{genotype=GenoType},
@@ -13,15 +13,25 @@ init([GenoType])->
 
 handle_call(dump,_,State)->
 	#state{genotype=GenoType}=State,
-	{reply,GenoType,State}.
+	{reply,GenoType,State};
+handle_call({update_weight,LearnRate,{Mod,NeighboorFun,PartialArgs}},_,State)->
+	#state{histSig={_,Signal},genotype=GenoType}=State,
+	#neuron_som{coordinates=Coord,weight=Weight}=GenoType,
+	Scalar=LearnRate*erlang:apply(Mod,NeighboorFun,[Coord|PartialArgs]),
+	SubVect=[X-Y||{X,Y}<-lists:zip(Signal,Weight)],
+	DeltaVect=[X*Y||X<-[Scalar],Y<-SubVect],
+	NewWeight=[X+Y||{X,Y}<-lists:zip(Weight,DeltaVect)],
+	NewGenoType=GenoType#neuron_som{weight=NewWeight},
+	NewState=State#state{genotype=NewGenoType},
+	{reply,ok,NewState}.
 
 terminate(normal,_)->ok.
 
-handle_cast({ElType,_,_,FwdType,Signal},State)when ElType==sensor->
+handle_cast({ElType,_,IdFrom,FwdType,Signal},State)when ElType==sensor->
 	#state{genotype=GenoType}=State,
-	#neuron_som{id=Id,af=Af,weight=Weight,fanouts=Outs}=GenoType,
+	#neuron_som{id=Id,coordinates=Coord,af=Af,weight=Weight,fanouts=Outs}=GenoType,
 	Dist=af:Af(Weight,Signal),
-	[gen_server:cast(Pid,{neuron,null,Id,FwdType,[Dist]})||Pid<-Outs],
-	NewState=State#state{histOut={Dist},histSig={Signal}},
+	[gen_server:cast(Pid,{neuron,Coord,Id,FwdType,[Dist]})||Pid<-Outs],
+	NewState=State#state{histOut={Dist},histSig={IdFrom,Signal}},
 	{noreply,NewState}.
 

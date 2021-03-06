@@ -1,10 +1,9 @@
 #!/usr/bin/env escript
 
-main(["evo"])->
-	Geno=genotype:create_NN({ffnn,sigmund,none},2,1,[]),
-	Constraint={[add_neuron,add_layer_neuron],[{af,none},{plast,none}]},
-	GenoM=genotype_mutator:mutate(Geno,6,Constraint),
-	io:fwrite("~p~n",[GenoM]);
+main(["som"])->
+	Geno=genotype:create_SOM(euclidean,{2,[],[]},{[],[]},{[],[]},{3,3}),
+	nn:new(contr,Geno),
+	io:fwrite("~p~n",[nn:get(contr)]);
 main(["regr"]) ->
 	Dataset="boston_house_prices.csv",
 	{ok,Pid}=regression:start(Dataset,fun csv:read/1),
@@ -12,7 +11,7 @@ main(["regr"]) ->
 	io:fwrite("INFO: ~p~n",[Info]),
 	#{mins:=Mins,maxs:=Maxs,avgs:=Avgs,stds:=Stds,num_features:=FeatNum,len:=Len}=Info,
 	SensorSpec={FeatNum,[{preprocess,standardization_global,[Avgs,Stds]}],[{preprocess,standardization_global,[Avgs,Stds]}]},
-	ActuatorSpec={1,[],[]},
+	ActuatorSpec={1,[{utils,actuator_get_signals,[]}],[{utils,actuator_get_signals,[]}]},
 	CortexSpec={[{fun(List)->hd(List) end,[]}],[{fun(List)->hd(List) end,[]}]},
 	regression:set_limit(Pid,Len*80/100),
 	nn:new(contr,Pid,{ffnn,rectifier,none},{SensorSpec,ActuatorSpec,CortexSpec,[round(FeatNum/10)]}),
@@ -31,7 +30,7 @@ main(["class"]) ->
 	%io:fwrite("INFO: ~p~n",[Info]),
 	#{mins:=Mins,maxs:=Maxs,avgs:=Avgs,stds:=Stds,num_features:=FeatNum,num_classes:=Classes,len:=Len,encoding:=Enc}=Info,
 	SensorSpec={FeatNum,[{preprocess,standardization_global,[Avgs,Stds]}],[{preprocess,standardization_global,[Avgs,Stds]}]},
-	ActuatorSpec={Classes,[{preprocess,softmax,[]}],[{preprocess,softmax,[]},{preprocess,mostLikely,[]},{preprocess,decode,[Enc]}]},
+	ActuatorSpec={Classes,[{utils,actuator_get_signals,[]},{preprocess,softmax,[]}],[{utils,actuator_get_signals,[]},{preprocess,softmax,[]},{preprocess,mostLikely,[]},{preprocess,decode,[Enc]}]},
 	CortexSpec={[{erlang,hd,[]}],[{erlang,hd,[]}]},
 	classification:set_limit(Pid,Len*85/100),
 	nn:new(contr,Pid,{rnn,sigmund,none},{SensorSpec,ActuatorSpec,CortexSpec,[4]}),

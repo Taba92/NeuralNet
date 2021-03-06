@@ -7,7 +7,8 @@
 -include("utils.hrl").
 
 get_cortex_id(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.id.
-get_neurons_ids(Genotype)->#genotype{neurons=Neurons}=Genotype,[Neuron#neuron.id||Neuron<-Neurons].
+%get_neurons_ids(Genotype)->#genotype{neurons=Neurons}=Genotype,[Neuron#neuron.id||Neuron<-Neurons].
+get_neurons_ids(Genotype)->#genotype{neurons=Neurons}=Genotype,[Neuron#neuron_som.id||Neuron<-Neurons].
 get_sensors_ids(Genotype)->#genotype{sensors=Sensors}=Genotype,[Sensor#sensor.id||Sensor<-Sensors].
 get_actuators_ids(Genotype)->#genotype{actuators=Actuators}=Genotype,[Act#actuator.id||Act<-Actuators].
 get_ids(Genotype)->get_sensors_ids(Genotype)++get_neurons_ids(Genotype)++get_actuators_ids(Genotype)++[get_cortex_id(Genotype)].
@@ -22,7 +23,7 @@ get_layers(Genotype)->
 	Layer=fun(#neuron{layer=L},Layers)->case L>lists:last(Layers) of true->Layers++[L];false->Layers end end,
 	erlang:tl(lists:foldl(Layer,[0],Net)).
 
-create_SOM(Af,{SensorVl,SFitDirectives,SRealDirectives},{_,AFitDirectives,ARealDirectives},{CFitDirectives,CRealDirectives},{NumX,NumY})->
+create_SOM(Af,{SensorVl,SFitDirectives,SRealDirectives},{AFitDirectives,ARealDirectives},{CFitDirectives,CRealDirectives},{NumX,NumY})->
 	Sensor=#sensor{id=?GETID,vl=SensorVl,fit_directives=SFitDirectives,real_directives=SRealDirectives},
 	Actuator=#actuator{id=?GETID,vl=NumX*NumY,fit_directives=AFitDirectives,real_directives=ARealDirectives},
 	{ConnSensor,Net,ConnActuator}=create_neuro_net(som,Af,{Sensor,[],Actuator},{NumX,NumY},0),
