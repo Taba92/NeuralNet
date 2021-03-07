@@ -21,6 +21,7 @@ derivate(threshold,X)->case X=<0 of true->0;false->1 end.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%FOR SOM NEURONS%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+euclidean(Weight,Signal)when is_tuple(Weight),is_tuple(Signal)->euclidean(tuple_to_list(Weight),tuple_to_list(Signal),0);
 euclidean(Weight,Signal)->euclidean(Weight,Signal,0).
 euclidean([W|RestWeight],[S|RestSignal],Acc)->
 	Dist=math:pow((W-S),2),

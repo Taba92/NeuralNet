@@ -13,13 +13,14 @@ fit(State,Parameters)when map_get(type,Parameters)==eshc->
 	AlgoParameters=maps:merge(Parameters,#{bestGeno=>Geno,bestFit=>Fit}),
 	fit_eshc(State,AlgoParameters);
 fit(State,Parameters)when map_get(type,Parameters)==som->
-	fit_som(State,Parameters).
+	AlgoParameters=maps:merge(Parameters,#{iterations=>map_get(cycle,Parameters)}),
+	fit_som(State,AlgoParameters).
 
 
 %%%FIT ALGORITMHS FOR UNSUPERVISED LEARNING
 fit_som(State,AlgoParameters)->%online update
 	#agent{scape=Scape,genotype=Geno,cortexId=CortexId,fitness=CurFit}=State,
-	#{cycle:=Cycle,learnRate:=LearnRate,neighboorSize:=NeighboorSize}=AlgoParameters,
+	#{cycle:=Cycle,iterations:=Iterations,learnRate:=LearnRate,neighboorSize:=NeighboorSize}=AlgoParameters,
 	case Cycle==0 of
 		true->
 			FittedGeno=phenotype:pheno_to_geno(CortexId),
@@ -27,19 +28,22 @@ fit_som(State,AlgoParameters)->%online update
 		false->
 			gen_server:call(Scape,reset),
 			NeuronsIds=genotype:get_neurons_ids(Geno),
-			learn_som(CortexId,NeuronsIds,LearnRate,NeighboorSize),
-			NewParams=#{cycle=>Cycle-1,learnRate=>LearnRate/2,neighboorSize=>NeighboorSize/2},
+			CurLearnRate=LearnRate*(1-(Iterations-Cycle+1)/Iterations),
+			CurNeighboorSize=NeighboorSize*(1-(Iterations-Cycle)/Iterations),
+			learn_som(CortexId,NeuronsIds,CurLearnRate,CurNeighboorSize),
+			NewParams=maps:update(cycle,Cycle-1,AlgoParameters),
 			fit_som(State,NewParams)
 	end.
 
 learn_som(CortexId,Neurons,LearnRate,NeighboorSize)->
 	gen_server:cast(CortexId,fit_cycle),
-	receive {fit,Flag,BMU}->ok end,
+	receive {fit,Flag,Msg}->ok end,
+	#{bmu:=BMU}=Msg,
 	{_,Coord,_}=BMU,
-	[gen_server:call(Id,{update_weight,LearnRate,{utils,gaussian,[Coord,NeighboorSize]}})||Id<-Neurons],
+	[gen_server:call(Id,{update_weight,LearnRate,{utils,gaussian_neighborhood,[Coord,NeighboorSize]}})||Id<-Neurons],
 	case Flag of
 		another->learn_som(CortexId,Neurons,LearnRate,NeighboorSize);
-		finish->ok
+		finish->io:fwrite("Iteration over~n")
 	end.
 %%%
 

@@ -1,12 +1,12 @@
 -module(classification).
--export([start/2,start/3,extract_info/1,init/1,handle_call/3,is_finished/1,set_limit/2]).
+-export([start/2,start/1,extract_info/1,init/1,handle_call/3,is_finished/1,set_limit/2]).
 -record(state,{type,readed,current,numRead,limit,funRead,dataset,info,matrix,loss}).
 -define(METRICS,classification_metrics).
 -include("utils.hrl").
 -include_lib("kernel/include/file.hrl").
 
-start(Dataset,Limit)->gen_server:start(?MODULE,[Dataset,Limit],[]).
-start(Dataset,Fun,Limit)when is_function(Fun)->gen_server:start(?MODULE,[Dataset,Fun,Limit],[]).
+start(Dataset,Fun)when is_function(Fun)->gen_server:start(?MODULE,[Dataset,Fun],[]).
+start(Dataset)->gen_server:start(?MODULE,[Dataset],[]).
 extract_info(ScapeId)->gen_server:call(ScapeId,extract_info,infinity).
 set_limit(ScapeId,Limit)->gen_server:call(ScapeId,{set_limit,Limit},infinity).
 
