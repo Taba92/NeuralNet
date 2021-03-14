@@ -1,6 +1,7 @@
 -module(unsupervised).
 -export([start/3,start/2,extract_info/1,init/1,handle_call/3,is_finished/1,set_limit/2]).
 -record(state,{type,record_type,readed,current,numRead,limit,funRead,dataset,info,fit,loss}).
+-define(METRICS,unsupervised_metrics).
 -include("utils.hrl").
 -include_lib("kernel/include/file.hrl").
 
@@ -11,10 +12,12 @@ set_limit(ScapeId,Limit)->gen_server:call(ScapeId,{set_limit,Limit},infinity).
 
 init([DatasetPath,Fun,Type])when is_function(Fun),Type==labelled;Type==unlabelled->
 	{ok,Dataset}=file:open(DatasetPath,[read,raw,binary,{read_ahead,200000}]),
-	State=#state{type=file,record_type=Type,dataset=Dataset,numRead=0,funRead=Fun,fit=0,loss=0},
+	FitInit=LossInit=#{clustering=>0,topographic=>0},
+	State=#state{type=file,record_type=Type,dataset=Dataset,numRead=0,funRead=Fun,fit=FitInit,loss=LossInit},
 	{ok,State};
 init([Dataset,Type])when Type==labelled;Type==unlabelled->
-	State=#state{type=list,record_type=Type,readed=[],numRead=0,dataset=Dataset,fit=0,loss=0},
+	FitInit=LossInit=#{clustering=>0,topographic=>0},
+	State=#state{type=list,record_type=Type,readed=[],numRead=0,dataset=Dataset,fit=FitInit,loss=LossInit},
 	{ok,State}.
 
 handle_call(extract_info,_,State)when State#state.type==list->
@@ -31,16 +34,18 @@ handle_call({set_limit,Limit},_,State)->
 	{reply,ok,State#state{limit=round(Limit)}};
 handle_call(reset,_,State)when State#state.type==list->
 	#state{readed=Readed,current=Record,dataset=Dataset}=State,
+	FitInit=LossInit=#{clustering=>0,topographic=>0},
 	NewState=case Record of
-				undefined->State#state{readed=[],current=undefined,dataset=Dataset++Readed,numRead=0,fit=0,loss=0};
-				_->State#state{readed=[],current=undefined,dataset=Dataset++Readed++[Record],numRead=0,fit=0,loss=0}
+				undefined->State#state{readed=[],current=undefined,dataset=Dataset++Readed,numRead=0,fit=FitInit,loss=LossInit};
+				_->State#state{readed=[],current=undefined,dataset=Dataset++Readed++[Record],numRead=0,fit=FitInit,loss=LossInit}
 			end,
 	{reply,ok,NewState};
 handle_call(reset,_,State) when State#state.type==file->
 	#state{dataset=Dataset}=State,
 	file:position(Dataset,bof),
 	?READ(Dataset),
-	NewState=State#state{readed=[],current=undefined,numRead=0,fit=0,loss=0},
+	FitInit=LossInit=#{clustering=>0,topographic=>0},
+	NewState=State#state{readed=[],current=undefined,numRead=0,fit=FitInit,loss=LossInit},
 	{reply,ok,NewState};
 handle_call(sense,_,State)when State#state.type==list->
 	#state{dataset=[Record|T],record_type=Type}=State,
@@ -54,86 +59,90 @@ handle_call(sense,_,State)when State#state.type==file->
 	Features=?EXTRACT(Record,Type),
 	NewState=State#state{current=Features},
 	{reply,Features,NewState};
-handle_call({action_fit,BMU},_,State)when State#state.type==list->
+handle_call({action_fit,NodesOutput},_,State)when State#state.type==list->
 	#state{readed=Readed,current=Features,numRead=Num,limit=Limit,info=MapInfo,dataset=Dataset,fit=FitAcc,loss=LossAcc}=State,
+	#{clustering:=FitCluster,topographic:=FitTopographic}=FitAcc,
+	#{clustering:=LossCluster,topographic:=LossTopographic}=LossAcc,
 	#{len:=Len}=MapInfo,
-	PartialFit=1,
-	PartialLoss=1,
+	BMU=utils:get_BMU(NodesOutput),
+	{_,_,[PartialLossClustering]}=BMU,
+	PartialLossTopographic=?METRICS:topographic_error(BMU,NodesOutput),
+	PartialFitClustering=1-scale(PartialLossClustering),%?dubbi sullo scaling
+	PartialFitTopographic=1-PartialLossTopographic,
+	PartialFit=#{clustering=>PartialFitClustering,topographic=>PartialFitTopographic},
+	PartialLoss=#{clustering=>PartialLossClustering,topographic=>PartialLossTopographic},
 	case Dataset of
 		[] ->
-			Fitness =(FitAcc+PartialFit)/Len,
-			Loss=(LossAcc+PartialLoss)/Len,
-			NewState=State#state{readed=[],dataset=Dataset++Readed++[Features],numRead=0,fit=0,loss=0},
+			FitInit=LossInit=#{clustering=>0,topographic=>0},
+			Fitness=#{clustering=>(FitCluster+PartialFitClustering)/Len,topographic=>(FitTopographic+PartialFitTopographic)/Len},
+			Loss=#{clustering=>(LossCluster+PartialLossClustering)/Len,topographic=>(LossTopographic+PartialLossTopographic)/Len},
+			NewState=State#state{readed=[],dataset=Dataset++Readed++[Features],numRead=0,fit=FitInit,loss=LossInit},
 			Msg=#{type=>unsupervised,partial_fit=>PartialFit,partial_loss=>PartialLoss,loss=>Loss,fitness=>Fitness,bmu=>BMU,features=>Features},
 			{reply,{finish,Msg},NewState};
 		_ ->
 			case Num==Limit of
 				true->
-					Fitness =(FitAcc+PartialFit)/Len,
-					Loss=(LossAcc+PartialLoss)/Len,
-					NewState=State#state{readed=Readed++[Features],numRead=0,fit=0,loss=0},
+					FitInit=LossInit=#{clustering=>0,topographic=>0},
+					Fitness=#{clustering=>(FitCluster+PartialFitClustering)/Len,topographic=>(FitTopographic+PartialFitTopographic)/Len},
+					Loss=#{clustering=>(LossCluster+PartialLossClustering)/Len,topographic=>(LossTopographic+PartialLossTopographic)/Len},
+					NewState=State#state{readed=Readed++[Features],numRead=0,fit=FitInit,loss=LossInit},
 					Msg=#{type=>unsupervised,partial_fit=>PartialFit,partial_loss=>PartialLoss,loss=>Loss,fitness=>Fitness,bmu=>BMU,features=>Features},
-			{reply,{finish,Msg},NewState};
+					{reply,{finish,Msg},NewState};
 				false->
-					NewState=State#state{readed=Readed++[Features],numRead=Num+1,fit=FitAcc+PartialFit,loss=LossAcc+PartialLoss},
+					NewFitAcc=#{clustering=>FitCluster+PartialFitClustering,topographic=>FitTopographic+PartialFitTopographic},
+					NewLossAcc=#{clustering=>LossCluster+PartialLossClustering,topographic=>LossTopographic+PartialLossTopographic},
+					NewState=State#state{readed=Readed++[Features],numRead=Num+1,fit=NewFitAcc,loss=NewLossAcc},
 					Msg=#{type=>unsupervised,partial_fit=>PartialFit,partial_loss=>PartialLoss,bmu=>BMU,features=>Features},
 					{reply,{another,Msg},NewState}
 			end
 	end;
-handle_call({action_fit,BMU},_,State)when State#state.type==file->
+handle_call({action_fit,NodesOutput},_,State)when State#state.type==file->
 	#state{current=Features,info=MapInfo,numRead=Num,limit=Limit,dataset=Dataset,fit=FitAcc,loss=LossAcc}=State,
 	#{len:=Len}=MapInfo,
-	PartialFit=1,
-	PartialLoss=1,
+	#{clustering:=FitCluster,topographic:=FitTopographic}=FitAcc,
+	#{clustering:=LossCluster,topographic:=LossTopographic}=LossAcc,
+	#{len:=Len}=MapInfo,
+	BMU=utils:get_BMU(NodesOutput),
+	{_,_,[PartialLossClustering]}=BMU,
+	PartialLossTopographic=?METRICS:topographic_error(BMU,NodesOutput),
+	PartialFitClustering=1-scale(PartialLossClustering),%?dubbi sullo scaling
+	PartialFitTopographic=1-PartialLossTopographic,
+	PartialFit=#{clustering=>PartialFitClustering,topographic=>PartialFitTopographic},
+	PartialLoss=#{clustering=>PartialLossClustering,topographic=>PartialLossTopographic},
 	case is_finished(Dataset) of
 		true->
-			Fitness =(FitAcc+PartialFit)/Len,
-			Loss=(LossAcc+PartialLoss)/Len,
+			FitInit=LossInit=#{clustering=>0,topographic=>0},
+			Fitness=#{clustering=>(FitCluster+PartialFitClustering)/Len,topographic=>(FitTopographic+PartialFitTopographic)/Len},
+			Loss=#{clustering=>(LossCluster+PartialLossClustering)/Len,topographic=>(LossTopographic+PartialLossTopographic)/Len},
 			file:position(Dataset,bof),
 			?READ(Dataset),
-			NewState=State#state{numRead=0,fit=0,loss=0},
+			NewState=State#state{numRead=0,fit=FitInit,loss=LossInit},
 			Msg=#{type=>unsupervised,partial_fit=>PartialFit,partial_loss=>PartialLoss,loss=>Loss,fitness=>Fitness,bmu=>BMU,features=>Features},
 			{reply,{finish,Msg},NewState};
 		false ->
 			case Num==Limit of
 				true->
-					Fitness =(FitAcc+PartialFit)/Len,
-					Loss=(LossAcc+PartialLoss)/Len,
-					NewState=State#state{numRead=0,fit=0,loss=0},
+					FitInit=LossInit=#{clustering=>0,topographic=>0},
+					Fitness=#{clustering=>(FitCluster+PartialFitClustering)/Len,topographic=>(FitTopographic+PartialFitTopographic)/Len},
+					Loss=#{clustering=>(LossCluster+PartialLossClustering)/Len,topographic=>(LossTopographic+PartialLossTopographic)/Len},
+					NewState=State#state{numRead=0,fit=FitInit,loss=LossInit},
 					Msg=#{type=>unsupervised,partial_fit=>PartialFit,partial_loss=>PartialLoss,loss=>Loss,fitness=>Fitness,bmu=>BMU,features=>Features},
-			{reply,{finish,Msg},NewState};
+					{reply,{finish,Msg},NewState};
 				false->
-					NewState=State#state{numRead=Num+1,fit=FitAcc+PartialFit,loss=LossAcc+PartialLoss},
+					NewFitAcc=#{clustering=>FitCluster+PartialFitClustering,topographic=>FitTopographic+PartialFitTopographic},
+					NewLossAcc=#{clustering=>LossCluster+PartialLossClustering,topographic=>LossTopographic+PartialLossTopographic},
+					NewState=State#state{numRead=Num+1,fit=NewFitAcc,loss=NewLossAcc},
 					Msg=#{type=>unsupervised,partial_fit=>PartialFit,partial_loss=>PartialLoss,bmu=>BMU,features=>Features},
 					{reply,{another,Msg},NewState}
 			end
-	end;
-handle_call({action_fit_predict,Predict},_,State)when State#state.type==list->
-	#state{readed=Readed,current=Record,dataset=Dataset}=State,
-	{_,Target}=?EXTRACT(Record),
-	Msg=#{type=>regression,target=>Target,predict=>Predict},
-	case Dataset of
-		[] ->
-			NewState=State#state{readed=[],dataset=Dataset++Readed++[Record]},
-			{reply,{finish,Msg},NewState};
-		_ ->
-			NewState=State#state{readed=Readed++[Record]},
-			{reply,{another,Msg},NewState}
-	end;
-handle_call({action_fit_predict,Predict},_,State)when State#state.type==file->
-	#state{current=Record,dataset=Dataset}=State,
-	{_,Target}=?EXTRACT(Record),
-	Msg=#{type=>regression,target=>Target,predict=>Predict},
-	case is_finished(Dataset) of
-		true->
-			file:position(Dataset,bof),
-			?READ(Dataset),
-			{reply,{finish,Msg},State};
-		false ->
-			{reply,{another,Msg},State}
-	end;
-handle_call({action_predict,_},_,State)->{reply,ok,State}.
+	end.
 
+
+scale(Value)->
+	case Value>=20 of
+		true->1;
+		false->Value/20
+	end.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%FOR FILE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 is_finished(Dataset)->
 	{ok,Pos}=file:position(Dataset,cur),

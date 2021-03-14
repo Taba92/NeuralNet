@@ -19,7 +19,7 @@ fit(State,Parameters)when map_get(type,Parameters)==som->
 
 %%%FIT ALGORITMHS FOR UNSUPERVISED LEARNING
 fit_som(State,AlgoParameters)->%online update
-	#agent{scape=Scape,genotype=Geno,cortexId=CortexId,fitness=CurFit}=State,
+	#agent{scape=Scape,genotype=Geno,cortexId=CortexId}=State,
 	#{cycle:=Cycle,iterations:=Iterations,learnRate:=LearnRate,neighboorSize:=NeighboorSize}=AlgoParameters,
 	case Cycle==0 of
 		true->
@@ -42,8 +42,16 @@ learn_som(CortexId,Neurons,LearnRate,NeighboorSize)->
 	{_,Coord,_}=BMU,
 	[gen_server:call(Id,{update_weight,LearnRate,{utils,gaussian_neighborhood,[Coord,NeighboorSize]}})||Id<-Neurons],
 	case Flag of
-		another->learn_som(CortexId,Neurons,LearnRate,NeighboorSize);
-		finish->io:fwrite("Iteration over~n")
+		another->
+			%#{partial_fit:=Fit,partial_loss:=Loss}=Msg,
+			%io:fwrite("PARTIAL FITNESS: ~p~n",[Fit]),
+			%io:fwrite("PARTIAL LOSS: ~p~n",[Loss]),
+			%timer:sleep(4000),
+			learn_som(CortexId,Neurons,LearnRate,NeighboorSize);
+		finish->
+			#{fitness:=Fit,loss:=Loss}=Msg,
+			io:fwrite("FITNESS: ~p~n",[Fit]),
+			io:fwrite("LOSS: ~p~n",[Loss])
 	end.
 %%%
 

@@ -12,7 +12,7 @@ main(["unsup"])->
 	io:fwrite("INFO: ~p~n",[Info]),
 	#{mins:=Mins,maxs:=Maxs,avgs:=Avgs,stds:=Stds,num_features:=FeatNum,len:=Len}=Info,
 	SensorSpec={FeatNum,[{preprocess,standardization_global,[Avgs,Stds]}],[{preprocess,standardization_global,[Avgs,Stds]}]},
-	ActuatorSpec={[{utils,get_BMU,[]}],[]},
+	ActuatorSpec={[],[{utils,get_BMU,[]}]},
 	CortexSpec={[{fun(List)->hd(List) end,[]}],[{fun(List)->hd(List) end,[]}]},
 	unsupervised:set_limit(Pid,Len*80/100),
 	Geno=genotype:create_SOM(euclidean,SensorSpec,ActuatorSpec,CortexSpec,{13,13}),

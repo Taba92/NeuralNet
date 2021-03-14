@@ -23,7 +23,11 @@ handle_call({update_weight,LearnRate,{Mod,NeighboorFun,PartialArgs}},_,State)->
 	NewWeight=[X+Y||{X,Y}<-lists:zip(Weight,DeltaVect)],
 	NewGenoType=GenoType#neuron_som{weight=NewWeight},
 	NewState=State#state{genotype=NewGenoType},
-	{reply,ok,NewState}.
+	{reply,ok,NewState};
+handle_call(get_neighbors,_,State)->
+	#state{genotype=GenoType}=State,
+	#neuron_som{neighbors=Neighboors}=GenoType,
+	{reply,Neighboors,State}.
 
 terminate(normal,_)->ok.
 
