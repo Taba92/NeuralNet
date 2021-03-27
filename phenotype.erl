@@ -1,8 +1,11 @@
 -module(phenotype).
 -export([geno_to_pheno/1,pheno_to_geno/1]).
--export([stop_phenotype/1,backup_weights/1,perturb_weights/1,restore_weights/1]).
+-export([stop_phenotype/1,backup_weights/1,perturb_weights/1,restore_weights/1,cluster_setting/2]).
 -export([link_to_cortex/2,link_nn_to_scape/2]).
 -include("utils.hrl").
+
+get_neuron_pheno(normal)->neuronPheno;
+get_neuron_pheno(som)->neuron_som.
 
 link_to_cortex(Agent,CortexId)->
 	#agent{id=Id}=Agent,
@@ -15,10 +18,11 @@ link_nn_to_scape(Genotype,Scape)->
 	ok.
 
 geno_to_pheno(GenoType)when is_record(GenoType,genotype)->
+	#genotype{type=Type}=GenoType,
+	NeuronPhenoType=get_neuron_pheno(Type),
 	#genotype{sensors=SensorsGeno,neurons=NetGeno,actuators=ActuatorsGeno,cortex=CortexGeno}=GenoType,
 	[sensorPheno:init(Sensor)||Sensor<-SensorsGeno],
-	%[neuronPheno:init(Neuron)||Neuron<-NetGeno],
-	[neuron_som:init(Neuron)||Neuron<-NetGeno],
+	[NeuronPhenoType:init(Neuron)||Neuron<-NetGeno],
 	[actuatorPheno:init(Actuator)||Actuator<-ActuatorsGeno],
 	cortexPheno:init(CortexGeno).
 
@@ -52,4 +56,10 @@ restore_weights(CortexId)->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
 	#cortex{neuronsIds=NeuronsIds}=CortexGeno,
 	[gen_server:call(Pid,restore_weights,infinity)||Pid<-NeuronsIds],
+	ok.
+
+cluster_setting(CortexId,Centroids)->
+	CortexGeno=gen_server:call(CortexId,dump,infinity),
+	#cortex{neuronsIds=NeuronsIds}=CortexGeno,
+	[gen_server:call(Pid,{cluster_setting,Centroids},infinity)||Pid<-NeuronsIds],
 	ok.

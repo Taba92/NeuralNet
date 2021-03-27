@@ -1,5 +1,5 @@
 -module(genotype).
--export([create_NN/5,create_SOM/5]).
+-export([create_NN/5]).
 -export([get_cortex_id/1,get_neurons_ids/1,get_sensors_ids/1,get_actuators_ids/1,get_ids/1]).
 -export([create_neuron/2,create_weight/2,get_layers/1,get_geno_spec/1]).
 -define(LAYER(Neurons),(hd(Neurons))#neuron.layer).
@@ -7,10 +7,9 @@
 -include("utils.hrl").
 
 get_cortex_id(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.id.
-%get_neurons_ids(Genotype)->#genotype{neurons=Neurons}=Genotype,[Neuron#neuron.id||Neuron<-Neurons].
-get_neurons_ids(Genotype)->#genotype{neurons=Neurons}=Genotype,[Neuron#neuron_som.id||Neuron<-Neurons].
-get_sensors_ids(Genotype)->#genotype{sensors=Sensors}=Genotype,[Sensor#sensor.id||Sensor<-Sensors].
-get_actuators_ids(Genotype)->#genotype{actuators=Actuators}=Genotype,[Act#actuator.id||Act<-Actuators].
+get_neurons_ids(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.neuronsIds.
+get_sensors_ids(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.sensorsIds.
+get_actuators_ids(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.actuatorsIds.
 get_ids(Genotype)->get_sensors_ids(Genotype)++get_neurons_ids(Genotype)++get_actuators_ids(Genotype)++[get_cortex_id(Genotype)].
 get_geno_spec(Genotype)->
 	#genotype{sensors=[S],actuators=[A]}=Genotype,
@@ -23,20 +22,28 @@ get_layers(Genotype)->
 	Layer=fun(#neuron{layer=L},Layers)->case L>lists:last(Layers) of true->Layers++[L];false->Layers end end,
 	erlang:tl(lists:foldl(Layer,[0],Net)).
 
-create_SOM(Af,{SensorVl,SFitDirectives,SRealDirectives},{AFitDirectives,ARealDirectives},{CFitDirectives,CRealDirectives},{NumX,NumY})->
+
+get_net_type({ffnn,_,_})->normal;
+get_net_type({{rnn,_},_,_})->normal;
+get_net_type({som,_})->som.
+
+create_NN({som,Af},SensorSpec,ActuatorSpec,CortexSpec,Params)->create_SOM({som,Af},SensorSpec,ActuatorSpec,CortexSpec,Params);
+create_NN(Constraint,SensorSpec,ActuatorSpec,CortexSpec,Params)->create_CLASSIC(Constraint,SensorSpec,ActuatorSpec,CortexSpec,Params).
+
+create_SOM(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{AFitDirectives,ARealDirectives},{CFitDirectives,CRealDirectives},{NumX,NumY})->
 	Sensor=#sensor{id=?GETID,vl=SensorVl,fit_directives=SFitDirectives,real_directives=SRealDirectives},
 	Actuator=#actuator{id=?GETID,vl=NumX*NumY,fit_directives=AFitDirectives,real_directives=ARealDirectives},
-	{ConnSensor,Net,ConnActuator}=create_neuro_net(som,Af,{Sensor,[],Actuator},{NumX,NumY},0),
+	{ConnSensor,Net,ConnActuator}=create_neuro_net(Constraint,{Sensor,[],Actuator},{NumX,NumY},0),
 	SensorsIds=[SId||#sensor{id=SId}<-[Sensor]],
 	NetIds=[NId||#neuron_som{id=NId}<-Net],
 	ActuatorsIds=[AId||#actuator{id=AId}<-[Actuator]],
 	Cortex=#cortex{id=?GETID,fit_directives=CFitDirectives,real_directives=CRealDirectives,sensorsIds=SensorsIds,neuronsIds=NetIds,actuatorsIds=ActuatorsIds},
 	NewActuator=ConnActuator#actuator{cortexId=Cortex#cortex.id},
-	#genotype{sensors=[ConnSensor],neurons=Net,actuators=[NewActuator],cortex=Cortex}.
+	#genotype{type=get_net_type(Constraint),sensors=[ConnSensor],neurons=Net,actuators=[NewActuator],cortex=Cortex}.
 
-create_NN({rnn,Af,Plast},SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity)->
-	create_NN({{rnn,0},Af,Plast},SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity);
-create_NN(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{ActuatorVl,AFitDirectives,ARealDirectives},{CFitDirectives,CRealDirectives},HiddenLayerDensity) ->
+create_CLASSIC({rnn,Af,Plast},SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity)->
+	create_CLASSIC({{rnn,0},Af,Plast},SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity);
+create_CLASSIC(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{ActuatorVl,AFitDirectives,ARealDirectives},{CFitDirectives,CRealDirectives},HiddenLayerDensity) ->
 	LayerDensity=HiddenLayerDensity++[ActuatorVl],
 	Sensor=#sensor{id=?GETID,vl=SensorVl,fit_directives=SFitDirectives,real_directives=SRealDirectives},
 	Actuator=#actuator{id=?GETID,vl=ActuatorVl,fit_directives=AFitDirectives,real_directives=ARealDirectives},
@@ -46,26 +53,26 @@ create_NN(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{ActuatorVl,AFitD
 	ActuatorsIds=[AId||#actuator{id=AId}<-[Actuator]],
 	Cortex=#cortex{id=?GETID,fit_directives=CFitDirectives,real_directives=CRealDirectives,sensorsIds=SensorsIds,neuronsIds=NetIds,actuatorsIds=ActuatorsIds},
 	NewActuator=ConnActuator#actuator{cortexId=Cortex#cortex.id},
-	#genotype{sensors=[ConnSensor],neurons=Net,actuators=[NewActuator],cortex=Cortex}.
+	#genotype{type=get_net_type(Constraint),sensors=[ConnSensor],neurons=Net,actuators=[NewActuator],cortex=Cortex}.
 
 %som
-create_neuro_net(som,Af,{Sensor,[],Actuator},{NumX,NumY},0)->
+create_neuro_net({som,Af},{Sensor,[],Actuator},{NumX,NumY},0)->
 	FirstLayer=[create_neuron_som(Af,0,Y,Sensor,Actuator)||Y<-lists:seq(0,NumY-1)],
 	ConnNet=connect_on_x(FirstLayer),
-	create_neuro_net(som,Af,{Sensor,ConnNet,Actuator},{NumX,NumY},1);
-create_neuro_net(som,Af,{Sensor,Net,Actuator},{NumX,NumY},X)when X<NumX-1->
+	create_neuro_net({som,Af},{Sensor,ConnNet,Actuator},{NumX,NumY},1);
+create_neuro_net({som,Af},{Sensor,Net,Actuator},{NumX,NumY},X)when X<NumX-1->
 	CurrentLayerNet=[create_neuron_som(Af,X,Y,Sensor,Actuator)||Y<-lists:seq(0,NumY-1)],
 	ConnCurrent=connect_on_x(CurrentLayerNet),
 	{UpdateNet,ConnNet}=connect_on_y(Net,ConnCurrent,X),
-	create_neuro_net(som,Af,{Sensor,UpdateNet++ConnNet,Actuator},{NumX,NumY},X+1);
-create_neuro_net(som,Af,{Sensor,Net,Actuator},{NumX,NumY},X)when X==NumX-1->
+	create_neuro_net({som,Af},{Sensor,UpdateNet++ConnNet,Actuator},{NumX,NumY},X+1);
+create_neuro_net({som,Af},{Sensor,Net,Actuator},{NumX,NumY},X)when X==NumX-1->
 	CurrentLayerNet=[create_neuron_som(Af,X,Y,Sensor,Actuator)||Y<-lists:seq(0,NumY-1)],
 	ConnCurrent=connect_on_x(CurrentLayerNet),
 	{UpdateNet,ConnNet}=connect_on_y(Net,ConnCurrent,X),
 	ConnSensor=Sensor#sensor{fanouts=[Id||#neuron_som{id=Id}<-UpdateNet++ConnNet]},
 	ConnActuator=Actuator#actuator{fanins=[Id||#neuron_som{id=Id}<-UpdateNet++ConnNet]},
-	{ConnSensor,UpdateNet++ConnNet,ConnActuator}.
-
+	{ConnSensor,UpdateNet++ConnNet,ConnActuator};
+%%
 %%rnn
 create_neuro_net({{rnn,N},Af,Plast},{Sensor,[],Actuator},[H|OtherLayer],1)->%%1° layer RNN
 	FirstLayerNet=[create_neuron(Af,1)||_<-lists:seq(1,H)],

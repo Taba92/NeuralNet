@@ -13,25 +13,28 @@ fit(State,Parameters)when map_get(type,Parameters)==eshc->
 	AlgoParameters=maps:merge(Parameters,#{bestGeno=>Geno,bestFit=>Fit}),
 	fit_eshc(State,AlgoParameters);
 fit(State,Parameters)when map_get(type,Parameters)==som->
-	AlgoParameters=maps:merge(Parameters,#{iterations=>map_get(cycle,Parameters)}),
-	fit_som(State,AlgoParameters).
+	AlgoParameters=Parameters#{iterations=>map_get(cycle,Parameters),fitness=>null},
+	FittedState=fit_som(State,AlgoParameters),
+	#{num_clusters:=K}=Parameters,
+	KMeansParameters=AlgoParameters#{converged=>false,last_centroids=>get_random_centroids(FittedState,K)},
+	k_means(FittedState,KMeansParameters).
 
 
 %%%FIT ALGORITMHS FOR UNSUPERVISED LEARNING
 fit_som(State,AlgoParameters)->%online update
 	#agent{scape=Scape,genotype=Geno,cortexId=CortexId}=State,
-	#{cycle:=Cycle,iterations:=Iterations,learnRate:=LearnRate,neighboorSize:=NeighboorSize}=AlgoParameters,
+	#{cycle:=Cycle,iterations:=Iterations,learnRate:=LearnRate,neighboorSize:=NeighboorSize,fitness:=Fitness}=AlgoParameters,
 	case Cycle==0 of
 		true->
 			FittedGeno=phenotype:pheno_to_geno(CortexId),
-			State#agent{genotype=FittedGeno};
+			State#agent{genotype=FittedGeno,fitness=Fitness};
 		false->
 			gen_server:call(Scape,reset),
 			NeuronsIds=genotype:get_neurons_ids(Geno),
 			CurLearnRate=LearnRate*(1-(Iterations-Cycle+1)/Iterations),
 			CurNeighboorSize=NeighboorSize*(1-(Iterations-Cycle)/Iterations),
-			learn_som(CortexId,NeuronsIds,CurLearnRate,CurNeighboorSize),
-			NewParams=maps:update(cycle,Cycle-1,AlgoParameters),
+			NewFitness=learn_som(CortexId,NeuronsIds,CurLearnRate,CurNeighboorSize),
+			NewParams=AlgoParameters#{cycle=>Cycle-1,fitness=>NewFitness},
 			fit_som(State,NewParams)
 	end.
 
@@ -43,18 +46,64 @@ learn_som(CortexId,Neurons,LearnRate,NeighboorSize)->
 	[gen_server:call(Id,{update_weight,LearnRate,{utils,gaussian_neighborhood,[Coord,NeighboorSize]}})||Id<-Neurons],
 	case Flag of
 		another->
-			%#{partial_fit:=Fit,partial_loss:=Loss}=Msg,
-			%io:fwrite("PARTIAL FITNESS: ~p~n",[Fit]),
-			%io:fwrite("PARTIAL LOSS: ~p~n",[Loss]),
-			%timer:sleep(4000),
 			learn_som(CortexId,Neurons,LearnRate,NeighboorSize);
 		finish->
 			#{fitness:=Fit,loss:=Loss}=Msg,
 			io:fwrite("FITNESS: ~p~n",[Fit]),
-			io:fwrite("LOSS: ~p~n",[Loss])
+			io:fwrite("LOSS: ~p~n",[Loss]),
+			Fit
 	end.
 %%%
 
+k_means(State,AlgoParameters)->
+	#{k_iterations:=Iterations,converged:=Converged,last_centroids:=LastCentroids}=AlgoParameters,
+	case (Iterations==0) or (Converged==true) of
+		true->State;
+		false->
+			{NewState,FinalCentroids}=assign_to_centroids(State,LastCentroids),
+			case LastCentroids==FinalCentroids of
+				true->
+					NewAlgoParameters=AlgoParameters#{k_iterations=>Iterations-1,converged=>true},
+					k_means(NewState,NewAlgoParameters);
+				false->
+					NewAlgoParameters=AlgoParameters#{k_iterations=>Iterations-1,last_centroids=>FinalCentroids},
+					k_means(NewState,NewAlgoParameters)
+			end
+	end.
+
+get_random_centroids(State,K)->
+	#agent{genotype=Geno}=State,
+	#genotype{neurons=Neurons}=Geno,
+	Weights=[Weight||#neuron_som{weight=Weight}<-Neurons],
+	get_random_centroids(Weights,K,[]).
+get_random_centroids(_,K,Centroids)when K==length(Centroids)->Centroids;
+get_random_centroids(Weights,K,Centroids)->
+	Centroid=?RANDCHOOSE(Weights),
+	get_random_centroids(Weights--[Centroid],K,Centroids++[Centroid]).
+
+assign_to_centroids(State,Centroids)->
+	#agent{cortexId=CortexId}=State,
+	phenotype:cluster_setting(CortexId,Centroids),
+	ClusteredGeno=phenotype:pheno_to_geno(CortexId),
+	ClusteredState=State#agent{genotype=ClusteredGeno},
+	NewCentroids=get_centroids(ClusteredState,length(Centroids)),
+	{ClusteredState,NewCentroids}.
+
+get_centroids(State,K)->
+	#agent{genotype=Geno}=State,
+	#genotype{sensors=[Sensor],neurons=Neurons}=Geno,
+	Clusters=[[Neuron||Neuron<-Neurons,Neuron#neuron_som.cluster==C]||C<-lists:seq(1,K)],
+	[weights_avg(Cluster,Sensor)||Cluster<-Clusters].
+
+weights_avg(Cluster,Sensor)->
+	CentroidLen=Sensor#sensor.vl,
+	weights_avg(Cluster,length(Cluster),lists:duplicate(CentroidLen,0)).
+weights_avg([],N,Acc)->[El/N||El<-Acc];
+weights_avg([HNeuron|T],N,Acc)->
+	#neuron_som{weight=Weight}=HNeuron,
+	weights_avg(T,N,sum(Weight,Acc)).
+
+sum(L1,L2)->[X+Y||{X,Y}<-lists:zip(L1,L2)].
 
 %%FIT ALGORITHMS FOR SUPERVISED LEARNING
 fit_eshc(State,AlgoParameters)->

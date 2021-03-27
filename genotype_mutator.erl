@@ -38,7 +38,7 @@ clone(Genotype)->
 	#genotype{sensors=Sensors,neurons=Neurons,actuators=Actuators,cortex=Cortex}=Genotype,
 	Ids=genotype:get_ids(Genotype),
 	MappingIds=lists:foldl(fun(Id,Map)->maps:merge(Map,#{Id=>?GETID}) end,#{},Ids),%crea un mapping tra vecchi id e nuovi id!
-	#genotype{sensors=switch_ids(Sensors,MappingIds),neurons=switch_ids(Neurons,MappingIds),actuators=switch_ids(Actuators,MappingIds),cortex=switch_ids(Cortex,MappingIds)}.
+	Genotype#genotype{sensors=switch_ids(Sensors,MappingIds),neurons=switch_ids(Neurons,MappingIds),actuators=switch_ids(Actuators,MappingIds),cortex=switch_ids(Cortex,MappingIds)}.
 
 mutate(Genotype,NMutation,Constraint)->
 	{MutatorsConstraint,SpecificsConstraint}=parse_constraint(Constraint),

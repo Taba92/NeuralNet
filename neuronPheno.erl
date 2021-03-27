@@ -1,7 +1,7 @@
 -module(neuronPheno).
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
--record(state,{received,roreceived,oldBias,oldWeights,oldRoWeights,histOut,histSig,genotype}).
+-record(state,{received,roreceived,oldBias,oldWeights,oldRoWeights,lastOutput,lastSignals,genotype}).
 -include("utils.hrl").
 
 init(GenoType)when is_record(GenoType,neuron)->
@@ -57,7 +57,7 @@ handle_cast({ElType,FromLayer,IdFrom,FwdType,Signal},State)when ElType==sensor;E
 						OutPut=af:Af(Dot+Bias),
 						NewGenotype=learn(GenoType,[OutPut],PrunRecv,PrunRoRecv),
 						[gen_server:cast(Pid,{neuron,Layer,Id,FwdType,[OutPut]})||Pid<-Outs++RoOuts],
-						State#state{histOut={Dot,OutPut},histSig={PrunRecv,PrunRoRecv},received=[],roreceived=[],genotype=NewGenotype};
+						State#state{lastOutput={Dot,OutPut},lastSignals={PrunRecv,PrunRoRecv},received=[],roreceived=[],genotype=NewGenotype};
 					false->
 						State#state{received=NewRecv,roreceived=NewRoRecv}
 			end,

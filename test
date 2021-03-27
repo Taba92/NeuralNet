@@ -1,9 +1,5 @@
 #!/usr/bin/env escript
 
-main(["som"])->
-	Geno=genotype:create_SOM(euclidean,{2,[],[]},{[],[]},{[],[]},{3,3}),
-	nn:new(contr,Geno),
-	io:fwrite("~p~n",[nn:get(contr)]);
 main(["unsup"])->
 	%Dataset="boston_house_prices.csv",
 	Dataset="/usr/local/lib/python3.7/site-packages/sklearn/datasets/data/iris.csv",
@@ -15,10 +11,9 @@ main(["unsup"])->
 	ActuatorSpec={[],[{utils,get_BMU,[]}]},
 	CortexSpec={[{fun(List)->hd(List) end,[]}],[{fun(List)->hd(List) end,[]}]},
 	unsupervised:set_limit(Pid,Len*80/100),
-	Geno=genotype:create_SOM(euclidean,SensorSpec,ActuatorSpec,CortexSpec,{13,13}),
-	nn:new(contr,Geno),
-	nn:set_scape(contr,Pid),
-	io:fwrite("FITNESS: ~p~n",[nn:fit(contr,#{type=>som,cycle=>100,learnRate=>2,neighboorSize=>2},sync)]);
+	nn:new(contr,Pid,{som,euclidean},{SensorSpec,ActuatorSpec,CortexSpec,{7,7}}),
+	io:fwrite("FITNESS: ~p~n",[nn:fit(contr,#{type=>som,cycle=>100,learnRate=>2,neighboorSize=>2,num_clusters=>3,k_iterations=>100},sync)]),
+	io:fwrite("AGENT: ~p~n",[nn:get(contr)]);
 main(["regr"]) ->
 	Dataset="boston_house_prices.csv",
 	{ok,Pid}=regression:start(Dataset,fun csv:read/1),

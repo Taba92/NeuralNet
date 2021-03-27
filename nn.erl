@@ -1,15 +1,15 @@
 -module(nn).
 -export([new/2,new/3,new/4,fit/2,fit/3,predict/2,predict/3,get/1,get/2,save_nn_file/2,save_nn_file/3,load_nn_file/2,load_nn_file/3,
 		stop/1,set_scape/2,set_scape/3,fit_predict/1,fit_predict/2]).
--define(CONTR,agent).
+-define(CONTROLLER,agent).
 -include("utils.hrl").
 
 new(Name,Genotype)when is_record(Genotype,genotype),is_atom(Name)->
 	new(Name,Genotype,0).
 new(Name,Genotype,Fitness)when is_record(Genotype,genotype),is_atom(Name),is_number(Fitness)->
-	gen_server:start({local,Name},?CONTR,[Name,Genotype,Fitness],[]).
-new(Name,ScapeId,Constraint,{SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity})->
-	Genotype=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity),
+	gen_server:start({local,Name},?CONTROLLER,[Name,Genotype,Fitness],[]).
+new(Name,ScapeId,Constraint,{SensorSpec,ActuatorSpec,CortexSpec,Params})->
+	Genotype=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,CortexSpec,Params),
 	new(Name,Genotype),
 	set_scape(Name,ScapeId).
 

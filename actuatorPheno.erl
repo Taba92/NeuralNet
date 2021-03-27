@@ -46,7 +46,7 @@ handle_cast({neuron,Term,NId,forward_fit_predict,Signal},State)->
 					ProcessedSignal=eval_funs(OrderedSignal,Funs),
 					{Flag,Msg}=gen_server:call(Scape,{action_fit_predict,ProcessedSignal},infinity),
 					gen_server:cast(CortexId,{fit_predict,Id,Flag,Msg}),
-	+				State#state{received=[]};
+					State#state{received=[]};
 				false->
 					State#state{received=NewRecv}
 			end,
