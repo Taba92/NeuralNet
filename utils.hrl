@@ -6,8 +6,8 @@
 -define(SAT_LIMIT,math:pi()*2).
 -define(RANDCHOOSE(List),utils:randchoose(List)).
 -define(NORMFIT(Fit),utils:normalize_fit(Fit)).
--define(EXTRACT(Record),lists:split(length(Record)-1,Record)).
--define(EXTRACT(Record,Type),case Type of labelled->element(1,lists:split(length(Record)-1,Record));unlabelled->Record end).
+-define(EXTRACT(Record),lists:split(length(Record)-1,Record)).%for supervised records
+-define(EXTRACT(Record,Type),case Type of labelled->element(1,lists:split(length(Record)-1,Record));unlabelled->Record end).%for unsupervised records
 -define(READ(File),file:read_line(File)).
 
 

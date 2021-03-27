@@ -135,7 +135,30 @@ handle_call({action_fit,NodesOutput},_,State)when State#state.type==file->
 					Msg=#{type=>unsupervised,partial_fit=>PartialFit,partial_loss=>PartialLoss,bmu=>BMU,features=>Features},
 					{reply,{another,Msg},NewState}
 			end
-	end.
+	end;
+handle_call({action_fit_predict,Cluster},_,State)when State#state.type==list->
+	#state{readed=Readed,current=Record,dataset=Dataset}=State,
+	Msg=#{type=>unsupervised,cluster=>Cluster},
+	case Dataset of
+		[] ->
+			NewState=State#state{readed=[],dataset=Dataset++Readed++[Record]},
+			{reply,{finish,Msg},NewState};
+		_ ->
+			NewState=State#state{readed=Readed++[Record]},
+			{reply,{another,Msg},NewState}
+	end;
+handle_call({action_fit_predict,Cluster},_,State)when State#state.type==file->
+	#state{dataset=Dataset}=State,
+	Msg=#{type=>unsupervised,cluster=>Cluster},
+	case is_finished(Dataset) of
+		true->
+			file:position(Dataset,bof),
+			?READ(Dataset),
+			{reply,{finish,Msg},State};
+		false ->
+			{reply,{another,Msg},State}
+	end;
+handle_call({action_predict,_},_,State)->{reply,ok,State}.
 
 
 scale(Value)->

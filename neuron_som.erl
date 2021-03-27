@@ -40,11 +40,17 @@ handle_call({cluster_setting,Centroids},_,State)->
 
 terminate(normal,_)->ok.
 
-handle_cast({ElType,_,_,FwdType,Signal},State)when ElType==sensor->
+handle_cast({ElType,_,_,forward_fit,Signal},State)when ElType==sensor->
 	#state{genotype=GenoType}=State,
 	#neuron_som{id=Id,coordinates=Coord,af=Af,weight=Weight,fanouts=Outs}=GenoType,
 	Dist=af:Af(Weight,Signal),
-	[gen_server:cast(Pid,{neuron,Coord,Id,FwdType,[Dist]})||Pid<-Outs],
+	[gen_server:cast(Pid,{neuron,Coord,Id,forward_fit,[Dist]})||Pid<-Outs],
+	NewState=State#state{lastOutput=Dist,lastSignals=Signal},
+	{noreply,NewState};
+handle_cast({ElType,_,_,FwdType,Signal},State)when ElType==sensor->
+	#state{genotype=GenoType}=State,
+	#neuron_som{id=Id,coordinates=Coord,af=Af,weight=Weight,cluster=Cluster,fanouts=Outs}=GenoType,
+	Dist=af:Af(Weight,Signal),
+	[gen_server:cast(Pid,{neuron,{Coord,Cluster},Id,FwdType,[Dist]})||Pid<-Outs],
 	NewState=State#state{lastOutput=Dist,lastSignals=Signal},
 	{noreply,NewState}.
-
