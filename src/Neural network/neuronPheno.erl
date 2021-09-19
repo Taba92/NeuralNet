@@ -64,19 +64,19 @@ handle_cast({ElType,FromLayer,IdFrom,FwdType,Signal},State)when ElType==sensor;E
 	{noreply,NewState}.
 
 prunSignals(Signals,Len)->%nel caso il numero di segnali ricevuti sia maggiore di quelli permessi allora scarta quelli in eccesso
-	case length(Signals)=<Len of
-		true->Signals;
-		false->{LenSignals,_}=lists:split(Len,Signals),
-				LenSignals
+	case length(Signals) =< Len of
+		true -> Signals;
+		false -> {LenSignals,_} = lists:split(Len,Signals),
+				  LenSignals
 	end.
 
 aggregate([nil|_],_)->0;%nel caso avessi connessioni ricorsive e fossi all'inizio del fit
-aggregate(Signals,Weights)->
-	aggregate(Signals,Weights,0). 
+aggregate(Signals, Weights)->
+	aggregate(Signals, Weights, 0). 
 aggregate([],_,Acc)->Acc;
 aggregate([{Id,Signal}|T],Weight,Acc)->
 	{Id,W,_}=lists:keyfind(Id,1,Weight),
-	aggregate(T,Weight,Acc+dot(Signal,W,Acc)).
+	aggregate(T, Weight, Acc + dot(Signal,W,Acc)).
 	
 
 perturbate_weight({Id,Weight,Modulator},Sup)->
@@ -85,8 +85,8 @@ perturbate_weight({Id,Weight,Modulator},Sup)->
 		false->{Id,Weight,Modulator}
 	end.
 
-perturbate_vals([])->[];
-perturbate_vals([H|T])->[utils:perturbate(H)|perturbate_vals(T)].
+perturbate_vals([]) -> [];
+perturbate_vals([H|T]) -> [utils:perturbate(H) | perturbate_vals(T)].
 
 perturbate_bias(Val,Sup)->
 	case ?PROB(Sup) of

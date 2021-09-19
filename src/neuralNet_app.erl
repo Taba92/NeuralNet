@@ -1,7 +1,3 @@
-%%%-------------------------------------------------------------------
-%% @doc neuralNet public API
-%% @end
-%%%-------------------------------------------------------------------
 
 -module(neuralNet_app).
 
@@ -15,4 +11,3 @@ start(_StartType, _StartArgs) ->
 stop(_State) ->
     ok.
 
-%% internal functions

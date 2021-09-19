@@ -45,20 +45,20 @@ mutate(Genotype,NMutation,Constraint)->
 	Mutators=[?RANDCHOOSE(MutatorsConstraint)||_<-lists:seq(1,NMutation)],
 	lists:foldl(fun(Fun,Geno)->?MODULE:Fun(Geno,SpecificsConstraint) end,Genotype,Mutators).
 
-parse_constraint(none)->{get_mutators(),[{af,af:all()},{plast,plasticity:all()}]};
+parse_constraint(none)->{get_mutators(),[{af,af:all_activation_functions_classic()},{plast,plasticity:all()}]};
 parse_constraint({none,[{af,none},{plast,none}]})->parse_constraint(none);
 parse_constraint({none,[{af,Afs},{plast,Plasts}]})when is_list(Afs),is_list(Plasts)->
 	{get_mutators(),[{af,Afs},{plast,Plasts}]};
 parse_constraint({none,[{af,Afs},{plast,none}]})when is_list(Afs)->
 	{get_mutators(),[{af,Afs},{plast,plasticity:all()}]};
 parse_constraint({none,[{af,none},{plast,Plasts}]})when is_list(Plasts)->
-	{get_mutators(),[{af,af:all()},{plast,Plasts}]};
+	{get_mutators(),[{af,af:all_activation_functions_classic()},{plast,Plasts}]};
 parse_constraint({Mutators,[{af,none},{plast,Plasts}]})when is_list(Mutators),is_list(Plasts)->
-	{Mutators,[{af,af:all()},{plast,Plasts}]};
+	{Mutators,[{af,af:all_activation_functions_classic()},{plast,Plasts}]};
 parse_constraint({Mutators,[{af,Afs},{plast,none}]})when is_list(Mutators),is_list(Afs)->
 	{Mutators,[{af,Afs},{plast,plasticity:all()}]};
 parse_constraint({Mutators,[{af,none},{plast,none}]})when is_list(Mutators)->
-	{Mutators,[{af,af:all()},{plast,plasticity:all()}]};
+	{Mutators,[{af,af:all_activation_functions_classic()},{plast,plasticity:all()}]};
 parse_constraint({Mutators,[{af,Afs},{plast,Plasts}]})when is_list(Mutators),is_list(Afs),is_list(Plasts)->
 	{Mutators,[{af,Afs},{plast,Plasts}]}.
 

@@ -143,8 +143,8 @@ fit_ashc(State,AlgoParameters)->
 					NewParams=maps:merge(AlgoParameters,#{bestGeno=>FittedGeno,bestFit=>Fitness,cycleAshc=>CycleAshc-1}),
 					fit_ashc(FittedState,NewParams);
 				false->
-					{SensorSpec,ActuatorSpec,HiddenLayers}=genotype:get_geno_spec(FittedGeno),
-					NewGeno=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,HiddenLayers),
+					{SensorSpec,ActuatorSpec,CortexSpec,HiddenLayers}=genotype:get_geno_spec(FittedGeno),
+					NewGeno=genotype:create_NN(Constraint,SensorSpec,ActuatorSpec,CortexSpec,HiddenLayers),
 					phenotype:stop_phenotype(CortexId),
 					phenotype:geno_to_pheno(NewGeno),
 					NewCortexId=genotype:get_cortex_id(NewGeno),

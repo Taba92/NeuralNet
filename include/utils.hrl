@@ -1,12 +1,12 @@
--define(GETID,utils:get_id()).
--define(RAND,rand:normal()).
+-define(GETID, utils:get_id()).
+-define(RAND, rand:normal()).
 -define(E,2.71828182845904523536).
--define(MINPERTURB,(1*math:pow(10,-308))).
--define(PROB(Sup),utils:prob_on(Sup)).
--define(SAT_LIMIT,math:pi()*2).
--define(RANDCHOOSE(List),utils:randchoose(List)).
--define(NORMFIT(Fit),utils:normalize_fit(Fit)).
--define(EXTRACT(Record),lists:split(length(Record)-1,Record)).%for supervised records
+-define(MINPERTURB, (1 * math:pow(10, -308))).
+-define(PROB(Sup), casuality_utils:prob_on_range(Sup)).
+-define(SAT_LIMIT, math:pi()*2).
+-define(RANDCHOOSE(List), casuality_utils:rand_choose(List)).
+-define(NORMFIT(Fit), utils:normalize_fit(Fit)).
+-define(EXTRACT(Record), lists:split(length(Record)-1,Record)).%for supervised records
 -define(EXTRACT(Record,Type),case Type of labelled->element(1,lists:split(length(Record)-1,Record));unlabelled->Record end).%for unsupervised records
 -define(READ(File),file:read_line(File)).
 

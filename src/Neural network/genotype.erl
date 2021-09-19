@@ -12,10 +12,11 @@ get_sensors_ids(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.senso
 get_actuators_ids(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.actuatorsIds.
 get_ids(Genotype)->get_sensors_ids(Genotype)++get_neurons_ids(Genotype)++get_actuators_ids(Genotype)++[get_cortex_id(Genotype)].
 get_geno_spec(Genotype)->
-	#genotype{sensors=[S],actuators=[A]}=Genotype,
+	#genotype{sensors=[S],actuators=[A], cortex = C} = Genotype,
 	#sensor{vl=SVl,fit_directives=SFit,real_directives=SReal}=S,
 	#actuator{vl=AVl,fit_directives=AFit,real_directives=AReal}=A,
-	{{SVl,SFit,SReal},{AVl,AFit,AReal},lists:droplast(get_layers(Genotype))}.
+	#cortex{fit_directives=CFit,real_directives=CReal} = C,
+	{{SVl,SFit,SReal},{AVl,AFit,AReal},{CFit,CReal},lists:droplast(get_layers(Genotype))}.
 
 get_layers(Genotype)->
 	#genotype{neurons=Net}=Genotype,

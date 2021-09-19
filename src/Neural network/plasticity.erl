@@ -44,45 +44,31 @@ apply_plasticity([{Id,Weight,{neuromod,N,LearnParams}}|T],Signals,Output,Acc)->
 	NewInWeight={Id,neuromod(N,Weight,LearnParams,Sig,Output),{neuromod,N,LearnParams}},
 	apply_plasticity(T,Signals,Output,Acc++[NewInWeight]).
 
-hebbian(Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*InputSignal*Output
-	A=dot(Sig,Output),
-	B=dot(LearnParams,A),
-	C=sum(Weight,B),
-	[utils:saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-C].
+hebbian(Weight, LearnParams, Sig, Output)->%W(t+1)=W(t)+H*InputSignal*Output
+	A = math_utils:lists_elements_dot(Sig, Output),
+	B = math_utils:lists_elements_dot(LearnParams, A),
+	C = math_utils:lists_elements_sum(Weight,B),
+	[math_utils:saturate(El, -?SAT_LIMIT, ?SAT_LIMIT) || El <- C].
 
-oja(Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*Output*(InputSignal–O*W(t))
-	A=sub(Sig,dot(Weight,Output)),
-	B=dot(Output,A),
-	C=dot(LearnParams,B),
-	D=sum(Weight,C),
-	[utils:saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-D].
+oja(Weight, LearnParams, Sig, Output)->%W(t+1)=W(t)+H*Output*(InputSignal–O*W(t))
+	A = math_utils:lists_elements_sub(Sig, math_utils:lists_elements_dot(Weight, Output)),
+	B = math_utils:lists_elements_dot(Output, A),
+	C = math_utils:lists_elements_dot(LearnParams, B),
+	D = math_utils:lists_elements_sum(Weight, C),
+	[math_utils:saturate(El, -?SAT_LIMIT, ?SAT_LIMIT) || El <- D].
 
-neuromod(N,Weight,LearnParams,Sig,Output)->%W(t+1)=W(t)+H*(A*InputSignal*Output+B*InputSignal+C*Output+D),
-	{Modulator,NotModulator}=lists:split(N,LearnParams),
-	[H,A,B,C,D]=[modulate(Mod,Sig)||Mod<-Modulator]++NotModulator,
-	P1=dot(A,dot(Sig,Output)),
-	P2=dot(B,Sig),
-	P3=dot(C,Output),
-	P4=sum(P1,sum(P2,sum(P3,D))),
-	P5=dot(H,P4),
-	P6=sum(Weight,P5),
-	[utils:saturate(El,-?SAT_LIMIT,?SAT_LIMIT)||El<-P6].
+neuromod(N, Weight, LearnParams, Sig, Output)->%W(t+1)=W(t)+H*(A*InputSignal*Output+B*InputSignal+C*Output+D),
+	{Modulator, NotModulator} = lists:split(N, LearnParams),
+	[H , A, B, C, D] = [ [modulate(Mod, Sig)] || Mod <- Modulator] ++ NotModulator,
+	P1 = math_utils:lists_elements_dot(A, math_utils:lists_elements_dot(Sig, Output)),
+	P2 = math_utils:lists_elements_dot(B, Sig),
+	P3 = math_utils:lists_elements_dot(C, Output),
+	P4 = math_utils:lists_elements_sum(P1, math_utils:lists_elements_sum(P2, math_utils:lists_elements_sum(P3, D))),
+	P5 = math_utils:lists_elements_dot(H, P4),
+	P6 = math_utils:lists_elements_sum(Weight, P5),
+	[math_utils:saturate(El, -?SAT_LIMIT, ?SAT_LIMIT) || El <- P6].
 
 modulate({Weight,Bias},Sig)->
-	try af:tanh(dot(Weight,Sig,0)+Bias) of
-		Val->[Val]
-	catch _:_->[?SAT_LIMIT]
-	end.
-
-dot(L1,L2)when length(L1)/=length(L2)->[try X*Y of Val->Val catch _:_->?SAT_LIMIT end||X<-L1,Y<-L2];
-dot(L1,L2)->[try X*Y of Val->Val catch _:_->?SAT_LIMIT end||{X,Y}<-lists:zip(L1,L2)].
-
-dot([],[],Dot)->Dot;
-dot([S|T],[W|K],Acc)->
-	dot(T,K,Acc+S*W).
-
-sum(L1,L2)when length(L1)/=length(L2)->[X+Y||X<-L1,Y<-L2];
-sum(L1,L2)->[X+Y||{X,Y}<-lists:zip(L1,L2)].
-
-sub(L1,L2)when length(L1)/=length(L2)->[X-Y||X<-L1,Y<-L2];
-sub(L1,L2)->[X-Y||{X,Y}<-lists:zip(L1,L2)].
+	DotSum = lists:sum(math_utils:lists_elements_dot(Weight, Sig)),
+	ModulateFun = fun() -> af:tanh(DotSum + Bias) end,
+	math_utils:catch_overflow(ModulateFun , ?SAT_LIMIT).
