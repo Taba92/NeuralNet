@@ -1,6 +1,12 @@
-#!/usr/bin/env escript
+-module(agent_SUITE).
+-export([]).
+-export([all/0]).
+-export([som/1, regressor/1, classifier/1]).
+-include_lib("common_test/include/ct.hrl").
 
-main(["unsup"])->
+all() -> [som, regressor, classifier].
+
+som(_)->
 	%Dataset="boston_house_prices.csv",
 	Dataset="/usr/local/lib/python3.7/site-packages/sklearn/datasets/data/iris.csv",
 	{ok,Pid}=unsupervised:start(Dataset,fun csv:read/1,labelled),
@@ -17,8 +23,9 @@ main(["unsup"])->
 	%io:fwrite("AGENT: ~p~n",[nn:get(contr)]);
 	nn:fit_predict(contr),
 	nn:predict(contr,[5.5,4.2,1.4,0.2]),
-	nn:predict(contr,[6.4,3.2,4.5,1.5]);
-main(["regr"]) ->
+	nn:predict(contr,[6.4,3.2,4.5,1.5]).
+
+regressor(_) ->
 	Dataset="boston_house_prices.csv",
 	{ok,Pid}=regression:start(Dataset,fun csv:read/1),
 	Info=regression:extract_info(Pid),
@@ -35,8 +42,9 @@ main(["regr"]) ->
 	%nn:fit(contr,#{type=>ashc,constraint=>{ffnn,sigmund,none},stepnessNeuron=>40,stepnessWeight=>40,cycleShc=>100,tgFit=>0.90,cycleAshc=>10},sync),
 	%population:new(pop,1,{scape,init,[]},{ffnn,rectifier,hebbian},{2,1,[]}),
 	%population:evolve(pop,20,Constraint,100,0.95).
-	nn:fit_predict(contr);
-main(["class"]) ->
+	nn:fit_predict(contr).
+
+classifier(_) ->
 	Dataset="/usr/local/lib/python3.7/site-packages/sklearn/datasets/data/iris.csv",
 	%Dataset="breast_cancer.csv",
 	{ok,Pid}=classification:start(Dataset,fun csv:read/1),
@@ -55,4 +63,3 @@ main(["class"]) ->
 	%population:new(pop,1,{scape,init,[]},{ffnn,rectifier,hebbian},{2,1,[]}),
 	%population:evolve(pop,20,Constraint,100,0.95).
 	nn:fit_predict(contr).
-
