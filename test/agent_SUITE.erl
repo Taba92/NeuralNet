@@ -1,10 +1,11 @@
 -module(agent_SUITE).
--export([]).
 -export([all/0]).
 -export([som/1, regressor/1, classifier/1]).
 -include_lib("common_test/include/ct.hrl").
 
 all() -> [som, regressor, classifier].
+
+
 
 som(_)->
 	%Dataset="boston_house_prices.csv",
