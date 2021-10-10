@@ -3,7 +3,7 @@
 -export([som/1, regressor/1, classifier/1]).
 -include_lib("common_test/include/ct.hrl").
 
-all() -> [som, regressor, classifier].
+all() -> [classifier].
 
 
 
@@ -48,14 +48,16 @@ regressor(_) ->
 classifier(_) ->
 	Dataset="/usr/local/lib/python3.7/site-packages/sklearn/datasets/data/iris.csv",
 	%Dataset="breast_cancer.csv",
-	{ok,Pid}=classification:start(Dataset,fun csv:read/1),
-	Info=classification:extract_info(Pid),
-	%io:fwrite("INFO: ~p~n",[Info]),
+	{ok, File} = file:open(Dataset, [read, binary]),
+    DatasetActions = scape:get_dataset_actions(csv),
+    {ok, Pid} = scape:start(classification, File, true, null, DatasetActions),
+	Info = scape:extract_info(Pid),
+	io:fwrite("INFO: ~p~n",[Info]),
 	#{mins:=Mins,maxs:=Maxs,avgs:=Avgs,stds:=Stds,num_features:=FeatNum,num_classes:=Classes,len:=Len,encoding:=Enc}=Info,
 	SensorSpec={FeatNum,[{preprocess,standardization_global,[Avgs,Stds]}],[{preprocess,standardization_global,[Avgs,Stds]}]},
 	ActuatorSpec={Classes,[{utils,actuator_get_signals,[]},{preprocess,softmax,[]}],[{utils,actuator_get_signals,[]},{preprocess,softmax,[]},{preprocess,mostLikely,[]},{preprocess,decode,[Enc]}]},
 	CortexSpec={[{erlang,hd,[]}],[{erlang,hd,[]}]},
-	classification:set_limit(Pid,Len*85/100),
+	scape:set_limit(Pid,Len*85/100),
 	nn:new(contr,Pid,{rnn,sigmund,none},{SensorSpec,ActuatorSpec,CortexSpec,[4]}),
 	%io:fwrite("FITNESS: ~p~n",[nn:fit(contr,#{type=>shc,cycleShc=>300,stepnessNeuron=>40,stepnessWeight=>40,tgFit=>0.80},sync)]),
 	Constraint={[add_neuro_link,add_layer_neuron,add_neuron],[{af,[sigmund]},{plast,none}]},

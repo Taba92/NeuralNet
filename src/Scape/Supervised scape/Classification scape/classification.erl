@@ -1,75 +1,67 @@
 -module(classification).
 -export([extract_info/1, init/1, handle_call/3]).
 -define(METRICS, classification_metrics).
--include("utils.hrl").
 -include("Scape/scape.hrl").
 
-init([Dataset, HasHeader, DatasetActions]) -> 
-	#dataset_actions{read_action = ReadFun} = DatasetActions,
+init([Dataset, HasHeader, Labelled, Cursor, DatasetActions]) -> 
+	StartState = #state{dataset = Dataset, has_header = HasHeader, cursor = Cursor, dataset_actions = DatasetActions, 
+						num_line_readed = 0, loss = 0, labelled = Labelled},
 	%Drop the header if the dataset have one
-	StartLineReaded = scape_utils:drop_header(HasHeader, Dataset, ReadFun),
-	State = #state{dataset = Dataset, has_header = HasHeader, dataset_actions = DatasetActions, num_line_readed = StartLineReaded, loss = 0},
-	{ok, State}.
+	InitialState = scape_service:drop_header(StartState),
+	{ok, InitialState}.
 
 handle_call(extract_info, _, State) ->
 	MapInfo = extract_info(State),
 	Matrix = ?METRICS:create_matrix_confusion(erlang:map_get(classes, MapInfo)),
 	{reply, MapInfo, State#state{info = MapInfo, matrix = Matrix }};
 
-handle_call({set_limit,Limit}, _, State) ->
+handle_call({set_limit, Limit}, _, State) ->
 	{reply, ok, State#state{limit = round(Limit) }};
 
 handle_call(reset, _, State) ->
-	#state{has_header = HasHeader, dataset_actions = DatasetActions, num_line_readed = NumLineReaded,
-			dataset = Dataset, info = MapInfo} = State,
-	#dataset_actions{read_action = ReadFun, reset_action = ResetFun} = DatasetActions,
+	#state{info = MapInfo} = State,
 	%Reset the dataset
-	ResettedDataset = ResetFun(Dataset, NumLineReaded),
+	ResettedState = scape_service:reset_scape(State),
 	%Recreate a new confusion matrix
-	Matrix = ?METRICS:create_matrix_confusion(erlang:map_get(classes,MapInfo)),
-	% Drop the header if the dataset have one
-	StartLineReaded = scape_utils:drop_header(HasHeader, ResettedDataset, ReadFun),
+	Matrix = ?METRICS:create_matrix_confusion(erlang:map_get(classes, MapInfo)),
 	%Reset the state
-	InitState = State#state{current = undefined, dataset = ResettedDataset, num_line_readed = StartLineReaded, matrix = Matrix, loss = 0},
+	InitState = ResettedState#state{current = undefined, matrix = Matrix, loss = 0},
 	{reply, ok, InitState};
 
 handle_call(sense, _, State) ->
-	#state{dataset = Dataset, dataset_actions = DatasetActions, num_line_readed = NumReadedLines} = State,
-	#dataset_actions{read_action = ReadFun, parse_line_action = ParseLineAction, extract_line_action = ExtractLineFun} = DatasetActions,
+	#state{dataset = Dataset, dataset_actions = DatasetActions, cursor = Cursor, labelled = Labelled} = State,
+	#dataset_actions{read_action = ReadFun, parse_line_action = ParseLineAction} = DatasetActions,
 	%%Read next record in the dataset
-	Record = ReadFun(Dataset, NumReadedLines + 1),
+	{Record, NewCursor} = ReadFun(Dataset, Cursor),
 	%Parse the record
 	ParsedRecord = ParseLineAction(Record),
 	%Extract features and target from the parsed record
-	{Features, _ } = ExtractLineFun(ParsedRecord),
-	NewState = State#state{current = Record},
+	{Features, _ } = scape_service:extract_features_and_target(Labelled, ParsedRecord),
+	NewState = State#state{current = Record, cursor = NewCursor},
 	{reply, Features, NewState};
 
 handle_call({action_fit, Prediction},_,State) ->
-	#state{current = Record, has_header = HasHeader, num_line_readed = NumLineReaded, limit = Limit, info = MapInfo, 
+	#state{current = Record, labelled = Labelled, num_line_readed = NumLineReaded, cursor = Cursor, limit = Limit, info = MapInfo, 
 		   dataset_actions = DatasetActions, dataset = Dataset, matrix = Matrix, loss = LossAcc} = State,
-	#dataset_actions{read_action = ReadFun, parse_line_action = ParseLineFun, extract_line_action = ExtractLineFun, 
-					is_finished_action = IsFinishedFun, reset_action = ResetFun} = DatasetActions,
+	#dataset_actions{parse_line_action = ParseLineFun, is_finished_action = IsFinishedFun} = DatasetActions,
 	%Parse the current readed record
 	ParsedRecord = ParseLineFun(Record),
 	%Extract target from the parsed record
-	{_, Target} = ExtractLineFun(ParsedRecord),
+	{_, Target} = scape_service:extract_features_and_target(Labelled, ParsedRecord),
 	#{encoding := Encoding, len := Len, classes := Classes} = MapInfo,
 	Encode = preprocess:encode(Target, Encoding),
 	PartialLoss = ?METRICS:cross_entropy(Encode, Prediction),
 	PartialFit = 1 - ?METRICS:manhattan_avg(Encode, Prediction),
 	ClassChoose = preprocess:decode(preprocess:mostLikely(Prediction), Encoding),
 	UpdateMatrix = ?METRICS:incr_cell_matrix(Target, ClassChoose, Matrix),
-	case IsFinishedFun(Dataset, NumLineReaded) of
+	case IsFinishedFun(Dataset, Cursor) of
 		true ->
 			Fitness = ?METRICS:f1_score_avg(Classes, UpdateMatrix),
 			Loss = (PartialLoss + LossAcc) / Len,
 			NewMatrix = ?METRICS:create_matrix_confusion(erlang:map_get(classes, MapInfo)),
 			%Reset the dataset
-			InitialDataset = ResetFun(Dataset, NumLineReaded),
-			%Drop header if the dataset have an header
-			StartLineReaded = scape_utils:drop_header(HasHeader, InitialDataset, ReadFun),
-			NewState = State#state{dataset = InitialDataset, num_line_readed = StartLineReaded, matrix = NewMatrix, loss = 0},
+			ResettedState = scape_service:reset_scape(State),
+			NewState = ResettedState#state{matrix = NewMatrix, loss = 0},
 			Msg = #{type => classification, partial_fit => PartialFit, partial_loss => PartialLoss,
 					loss => Loss, fitness => Fitness, target => Encode, predict => Prediction},
 			{reply, {finish, Msg}, NewState};
@@ -79,7 +71,7 @@ handle_call({action_fit, Prediction},_,State) ->
 					Fitness = ?METRICS:f1_score_avg(Classes, UpdateMatrix),
 					Loss = (PartialLoss + LossAcc) / Len,
 					NewMatrix = ?METRICS:create_matrix_confusion(erlang:map_get(classes, MapInfo)),
-					NewState=State#state{num_line_readed = 0, matrix = NewMatrix, loss = 0},
+					NewState = State#state{num_line_readed = 0, matrix = NewMatrix, loss = 0},
 					Msg = #{type => classification, partial_fit => PartialFit, partial_loss => PartialLoss, 
 							loss => Loss, fitness => Fitness, target => Encode, predict => Prediction},
 					{reply, {finish, Msg}, NewState};
@@ -92,27 +84,22 @@ handle_call({action_fit, Prediction},_,State) ->
 			end
 	end;
 
-handle_call({action_fit_predict,Predict},_,State) ->
-	#state{current = Record, has_header = HasHeader, dataset_actions = DatasetActions, dataset=Dataset, 
-		  num_line_readed = NumLineReaded}=State,
-	#dataset_actions{read_action = ReadFun, parse_line_action = ParseLineFun, extract_line_action = ExtractLineFun, 
-					is_finished_action = IsFinishedFun, reset_action = ResetFun} = DatasetActions,
+handle_call({action_fit_predict, Predict}, _, State) ->
+	#state{current = Record, labelled = Labelled, dataset_actions = DatasetActions, cursor = Cursor, dataset = Dataset,num_line_readed = NumLineReaded} = State,
+	#dataset_actions{parse_line_action = ParseLineFun, is_finished_action = IsFinishedFun} = DatasetActions,
 	%Parse the current readed record
 	ParsedRecord = ParseLineFun(Record),
 	%Extract target from the parsed record
-	{_, Target} = ExtractLineFun(ParsedRecord),
+	{_, Target} = scape_service:extract_features_and_target(Labelled, ParsedRecord),
 	Msg = #{type => classification, target => Target, predict => Predict},
-	case IsFinishedFun(Dataset, NumLineReaded) of
+	case IsFinishedFun(Dataset, Cursor) of
 		true ->
 			% Reset the dataset
-			InitialDataset = ResetFun(Dataset, NumLineReaded),
-			% Drop header if the dataset have an header
-			StartLineReaded = scape_utils:drop_header(HasHeader, InitialDataset, ReadFun),
-			NewState = State#state{dataset = InitialDataset, num_line_readed = StartLineReaded},
-			{reply, {finish,Msg}, NewState};
+			NewState = scape_service:reset_scape(State),
+			{reply, {finish, Msg}, NewState};
 		false ->
 			NewState = State#state{num_line_readed = NumLineReaded + 1},
-			{reply, {another,Msg}, NewState}
+			{reply, {another, Msg}, NewState}
 	end;
 
 handle_call({action_predict, _}, _, State) ->
@@ -120,61 +107,55 @@ handle_call({action_predict, _}, _, State) ->
 
 %%Assume that the State is the scape initial state!
 extract_info(State) ->
-	#state{dataset = Dataset, has_header = HasHeader, dataset_actions = DatasetActions, num_line_readed = NumLineReaded } = State,
-	#dataset_actions{get_line_action = GetLineAction, extract_line_action = ExtractLineFun, 
-					read_action = ReadFun, parse_line_action= ParseLineFun, reset_action = ResetFun} = DatasetActions,
+	#state{dataset = Dataset, cursor = Cursor, labelled = Labelled, dataset_actions = DatasetActions, num_line_readed = NumLineReaded } = State,
+	#dataset_actions{read_action = ReadFun, parse_line_action= ParseLineFun} = DatasetActions,
 	% 1) Get the first line of the dataset
-	CurrentLine = GetLineAction(Dataset, NumLineReaded),
+	{Line, NewCursor} = ReadFun(Dataset, Cursor),
+	NewState = State#state{cursor = NewCursor, num_line_readed = NumLineReaded + 1},
 	% 2) Get the number of features
-	ParsedLine = ParseLineFun(CurrentLine),
-	{Features, _} = ExtractLineFun(ParsedLine),
+	ParsedLine = ParseLineFun(Line),
+	{Features, _} = scape_service:extract_features_and_target(Labelled, ParsedLine),
 	NumFeatures = length(Features),
-	% 3) Initialize the mins and maxs vectors
-	Mins = Maxs = lists:duplicate(NumFeatures, none),
+	% 3) Initialize the mins, maxs and sums vectors
+	Mins = Maxs = Sums = Features,
 	% 4) Initialize supports vectors for infos computation
-	Sums = Scarti = lists:duplicate(NumFeatures, 0),
+	Scarti = lists:duplicate(NumFeatures, 0),
 	% 5) Computes infos vectors
 	% 5.1) Extract the first part of informations
-	{NewMins, NewMaxs, NewSums, DatasetLen} = scape_utils:extract_part_one(State, Mins, Maxs, Sums),
+	{NewMins, NewMaxs, NewSums, DatasetLen} = scape_service:extract_part_one(NewState, Mins, Maxs, Sums),
 	% 5.2) Reset the dataset
-	ResetFun(Dataset, DatasetLen),
-	StartLineReaded = scape_utils:drop_header(HasHeader, Dataset, ReadFun),
-	NewState = State#state{num_line_readed = StartLineReaded},
+	FirstResetState = scape_service:reset_scape(State),
 	% 5.3) Extract the second part of informations
 	Avgs = [Sum / DatasetLen || Sum <- NewSums],
-	Stds = scape_utils:extract_part_two(NewState, Avgs, Scarti, DatasetLen),
+	Stds = scape_service:extract_part_two(FirstResetState, Avgs, Scarti, DatasetLen),
 	% 5.4) Reset the dataset
-	ResetFun(Dataset, DatasetLen),
-	StartLineReaded = scape_utils:drop_header(HasHeader, Dataset, ReadFun),
-	NewState = State#state{num_line_readed = StartLineReaded},
+	SecondResetState = scape_service:reset_scape(FirstResetState),
 	% 5.5) Extract information specifics for the classification
-	Targets = extract_targets(NewState),
+	Targets = extract_targets(SecondResetState),
 	Encoding = preprocess:one_hot(Targets),
 	NumClasses = length(Targets),
 	% 5.6) Reset the dataset
-	ResetFun(Dataset, DatasetLen),
-	StartLineReaded = scape_utils:drop_header(HasHeader, Dataset, ReadFun),
-	NewState = State#state{num_line_readed = StartLineReaded},
+	scape_service:reset_scape(FirstResetState),
 	#{mins => NewMins, maxs => NewMaxs, len => DatasetLen, num_features => NumFeatures, num_classes => 
 		NumClasses, classes => Targets, avgs => Avgs, stds => Stds, encoding => Encoding}.
 
 extract_targets(State) ->
 	extract_targets(State, []).
 extract_targets(State, Targets) ->
-	#state{dataset = Dataset, dataset_actions = DatasetActions, num_line_readed = NumLineReaded} = State,
+	#state{dataset = Dataset, dataset_actions = DatasetActions, labelled = Labelled, cursor = Cursor, num_line_readed = NumLineReaded} = State,
 	#dataset_actions{read_action = ReadFun, parse_line_action = ParseLineFun, 
-					extract_line_action = ExtractLineFun, is_finished_action = IsFinishedFun} = DatasetActions,
-	case IsFinishedFun(Dataset, NumLineReaded) of
+					is_finished_action = IsFinishedFun} = DatasetActions,
+	case IsFinishedFun(Dataset, Cursor) of
 		true -> 
 			Targets;
 		false ->
-			Line = ReadFun(Dataset, NumLineReaded),
+			{Line, NewCursor} = ReadFun(Dataset, Cursor),
 			ParsedLine = ParseLineFun(Line),
-			{_, Target} = ExtractLineFun(ParsedLine),
+			{_, Target} = scape_service:extract_features_and_target(Labelled, ParsedLine),
 			NewTargets = case lists:member(Target, Targets) of
 							true -> Targets;
 							false -> Targets ++ [Target]
 						end,
-			NewState = State#state{num_line_readed = NumLineReaded + 1},
+			NewState = State#state{cursor = NewCursor, num_line_readed = NumLineReaded + 1},
 			extract_targets(NewState, NewTargets)
 	end.

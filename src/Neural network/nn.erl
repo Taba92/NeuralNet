@@ -20,8 +20,8 @@ get(AgentId,sync)->gen_server:call(AgentId,get,infinity);
 get(AgentId,async)->gen_server:send_request(AgentId,get).
 
 set_scape(AgentId,ScapeId)->set_scape(AgentId,ScapeId,sync).
-set_scape(AgentId,ScapeId,sync)when is_atom(ScapeId),is_pid(ScapeId)->gen_server:call(AgentId,{set_scape,ScapeId},infinity);
-set_scape(AgentId,ScapeId,async)when is_atom(ScapeId),is_pid(ScapeId)->gen_server:send_request(AgentId,{set_scape,ScapeId}).
+set_scape(AgentId,ScapeId,sync)when is_atom(ScapeId);is_pid(ScapeId)->gen_server:call(AgentId,{set_scape,ScapeId},infinity);
+set_scape(AgentId,ScapeId,async)when is_atom(ScapeId);is_pid(ScapeId)->gen_server:send_request(AgentId,{set_scape,ScapeId}).
 
 
 fit_predict(AgentId)->fit_predict(AgentId,sync).
