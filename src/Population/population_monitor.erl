@@ -90,7 +90,7 @@ create_new_agent(Scape,Genotype,Constraint)->
 	#genotype{neurons=Neurons}=Genotype,
 	NMutation=round(math:sqrt(length(Neurons))),
 	Cloned=genotype_mutator:clone(Genotype),
-	EvolvedGeno=genotype_mutator:mutate(Cloned,NMutation,Constraint),
+	{EvolvedGeno, _} = genotype_mutator:mutate(Cloned,NMutation,Constraint),
 	NewAgent=#agent{id=?GETID,scape=Scape,genotype=EvolvedGeno},
 	NewAgent.
 

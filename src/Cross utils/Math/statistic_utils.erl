@@ -1,4 +1,4 @@
--module(casuality_utils).
+-module(statistic_utils).
 -export([rand_choose/1, prob_on_range/1]).
 
 %%Given a List, return a random element of the List

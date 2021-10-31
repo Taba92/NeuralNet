@@ -1,4 +1,4 @@
--module(neuronPheno).
+-module(neuron).
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
 -record(state,{received,roreceived,oldBias,oldWeights,oldRoWeights,lastOutput,lastSignals,genotype}).

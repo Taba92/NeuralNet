@@ -1,7 +1,6 @@
--module(preprocess).
--export([one_hot/1,label/1,decode/2,encode/2,mostLikely/1,softmax/1]).
+-module(data_processing).
+-export([one_hot/1,label/1,decode/2,encode/2,most_likely/1,softmax/1]).
 -export([min_max_global/4,min_max_local/2,mean_global/4,mean_local/1,standardization_global/3,standardization_local/1]).
--include("utils.hrl").
 
 one_hot(Targets)when is_list(Targets)->
 	one_hot(Targets,length(Targets),1,[]).
@@ -34,9 +33,10 @@ encode(Value,Encoding)->
 		false->no_label_encoding
 	end.
 
-mostLikely(Predict)->%used in classification, given a vector of probabilities, it will set to one the most likely class
+%Given a vector of probabilities, return the most likely value
+most_likely(Predict) ->
 	MostProb=lists:max(Predict),
-	A=fun(Prob,{Class,Find})->case (Prob==MostProb) and (Find/=true) of
+	A=fun(Prob,{Class,Find})->case (Prob == MostProb) and (Find /= true) of
 								true->{Class++[1],true};
 								false->{Class++[0],Find}
 							end
@@ -45,8 +45,9 @@ mostLikely(Predict)->%used in classification, given a vector of probabilities, i
 	Label.
 
 softmax(Vector)when is_list(Vector)->
-	Den=lists:sum([math:pow(?E,X)||X<-Vector]),
-	[math:pow(?E,X)/Den||X<-Vector].
+	E = 2.71828182845904523536,
+	Den = lists:sum([math:pow(E, X) || X <- Vector]),
+	[math:pow(E,X)/Den||X<-Vector].
 
 min_max_global(Record,Mins,Maxs,{A,B})when is_list(Record),is_list(Mins),is_list(Maxs),A<B->
 	min_max(Record,Mins,Maxs,{A,B},[]).

@@ -43,64 +43,78 @@ clone(Genotype)->
 mutate(Genotype,NMutation,Constraint)->
 	{MutatorsConstraint,SpecificsConstraint}=parse_constraint(Constraint),
 	Mutators=[?RANDCHOOSE(MutatorsConstraint)||_<-lists:seq(1,NMutation)],
-	lists:foldl(fun(Fun,Geno)->?MODULE:Fun(Geno,SpecificsConstraint) end,Genotype,Mutators).
+	lists:foldl(fun(Fun,Geno)->?MODULE:Fun(Geno,SpecificsConstraint) end, {Genotype, []}, Mutators).
 
-parse_constraint(none)->{get_mutators(),[{af,af:all_activation_functions_classic()},{plast,plasticity:all()}]};
-parse_constraint({none,[{af,none},{plast,none}]})->parse_constraint(none);
-parse_constraint({none,[{af,Afs},{plast,Plasts}]})when is_list(Afs),is_list(Plasts)->
-	{get_mutators(),[{af,Afs},{plast,Plasts}]};
-parse_constraint({none,[{af,Afs},{plast,none}]})when is_list(Afs)->
-	{get_mutators(),[{af,Afs},{plast,plasticity:all()}]};
-parse_constraint({none,[{af,none},{plast,Plasts}]})when is_list(Plasts)->
-	{get_mutators(),[{af,af:all_activation_functions_classic()},{plast,Plasts}]};
-parse_constraint({Mutators,[{af,none},{plast,Plasts}]})when is_list(Mutators),is_list(Plasts)->
-	{Mutators,[{af,af:all_activation_functions_classic()},{plast,Plasts}]};
-parse_constraint({Mutators,[{af,Afs},{plast,none}]})when is_list(Mutators),is_list(Afs)->
-	{Mutators,[{af,Afs},{plast,plasticity:all()}]};
-parse_constraint({Mutators,[{af,none},{plast,none}]})when is_list(Mutators)->
-	{Mutators,[{af,af:all_activation_functions_classic()},{plast,plasticity:all()}]};
-parse_constraint({Mutators,[{af,Afs},{plast,Plasts}]})when is_list(Mutators),is_list(Afs),is_list(Plasts)->
-	{Mutators,[{af,Afs},{plast,Plasts}]}.
+
+parse_constraint(none) ->
+	{get_mutators(), [{af, af:all_activation_functions_classic()}, {plast, plasticity:all()}]};
+parse_constraint(#{mutators := none, af := none, plast := none}) -> 
+	parse_constraint(none);
+parse_constraint(#{mutators := none, af := Afs , plast := Plasts}) when is_list(Afs),is_list(Plasts) ->
+	{get_mutators(), [{af, Afs}, {plast, Plasts}]};
+parse_constraint(#{mutators := none, af := Afs, plast := none}) when is_list(Afs) ->
+	{get_mutators(), [{af, Afs}, {plast, plasticity:all()}]};
+parse_constraint(#{mutators := none, af := none, plast := Plasts}) when is_list(Plasts) ->
+	{get_mutators(), [{af, af:all_activation_functions_classic()}, {plast, Plasts}]};
+parse_constraint(#{mutators := Mutators, af := none, plast := Plasts}) when is_list(Mutators),is_list(Plasts) ->
+	{Mutators, [{af, af:all_activation_functions_classic()}, {plast, Plasts}]};
+parse_constraint(#{mutators := Mutators, af := Afs, plast := none}) when is_list(Mutators),is_list(Afs) ->
+	{Mutators, [{af, Afs}, {plast, plasticity:all()}]};
+parse_constraint(#{mutators := Mutators, af := none, plast := none}) when is_list(Mutators) ->
+	{Mutators, [{af, af:all_activation_functions_classic()}, {plast, plasticity:all()}]};
+parse_constraint(#{mutators := Mutators, af := Afs, plast := Plasts}) when is_list(Mutators),is_list(Afs),is_list(Plasts) ->
+	{Mutators, [{af, Afs}, {plast, Plasts}]}.
 
 get_mutators()->
 	[mutate_weights,mutate_bias,mutate_af,add_neuro_link,add_sensor_link,add_layer_neuron,add_neuron,mutate_plasticity].
 
-mutate_weights(Genotype,_)->
+mutate_weights({Genotype, Mutations}, _)->
 	#genotype{neurons=Neurons}=Genotype,
 	Neuron=?RANDCHOOSE(Neurons),
 	RemainNeurons=Neurons--[Neuron],
+	OldInsWeights = Neuron#neuron.faninsWeights,
+	OldRoInsWeights = Neuron#neuron.roinsWeights,
     NewIns=[{Id,[utils:perturbate(W)||W<-Weight],M}||{Id,Weight,M}<-Neuron#neuron.faninsWeights],
 	NewRoIns=[{Id,[utils:perturbate(W)||W<-Weight],M}||{Id,Weight,M}<-Neuron#neuron.roinsWeights],
 	MutatedNeuron=Neuron#neuron{faninsWeights=NewIns,roinsWeights=NewRoIns},
-	Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}.
+	Mutation = #{type => weights, neuron_id => Neuron#neuron.id, old_weights => {OldInsWeights, OldRoInsWeights}, new_weights => {NewIns, NewRoIns}},
+	{Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}, Mutations ++ [Mutation]}.
 
-mutate_plasticity(Genotype,Constraint)->
+mutate_plasticity({Genotype, Mutations}, Constraint)->
 	{plast,Plasts}=lists:keyfind(plast,1,Constraint),
 	#genotype{neurons=Neurons}=Genotype,
 	Neuron=?RANDCHOOSE(Neurons),
 	RemainNeurons=Neurons--[Neuron],
+	OldInsWeights = Neuron#neuron.faninsWeights,
+	OldRoInsWeights = Neuron#neuron.roinsWeights,
     NewIns=[{Id,Weight,plasticity:get_rand_plast(Weight,Plasts)}||{Id,Weight,_}<-Neuron#neuron.faninsWeights],
 	NewRoIns=[{Id,Weight,plasticity:get_rand_plast(Weight,Plasts)}||{Id,Weight,_}<-Neuron#neuron.roinsWeights],
     MutatedNeuron=Neuron#neuron{faninsWeights=NewIns,roinsWeights=NewRoIns},
-	Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}.
+	Mutation = #{type => plasticity, neuron_id => Neuron#neuron.id, old_weights => {OldInsWeights, OldRoInsWeights}, new_weights => {NewIns, NewRoIns}},
+	{Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}, Mutations ++ [Mutation]}.
 
-mutate_bias(Genotype,_)->
+mutate_bias({Genotype, Mutations}, _)->
 	#genotype{neurons=Neurons}=Genotype,
 	Neuron=?RANDCHOOSE(Neurons),
 	RemainNeurons=Neurons--[Neuron],
+	OldBias = Neuron#neuron.bias,
 	MutatedNeuron=Neuron#neuron{bias=utils:perturbate(Neuron#neuron.bias)},
-	Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}.
+	NewBias = MutatedNeuron#neuron.bias,
+	Mutation = #{type => bias, neuron_id => Neuron#neuron.id, old_bias => OldBias, new_bias => NewBias},
+	{Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}, Mutations ++ [Mutation]}.
 
-mutate_af(Genotype,Constraint)->
+mutate_af({Genotype, Mutations}, Constraint)->
 	{af,Afs}=lists:keyfind(af,1,Constraint),
 	#genotype{neurons=Neurons}=Genotype,
 	Neuron=?RANDCHOOSE(Neurons),
 	RemainNeurons=Neurons--[Neuron],
-	Af=?RANDCHOOSE(Afs),
-	MutatedNeuron=Neuron#neuron{af=Af},
-	Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}.
+	OldAf = Neuron#neuron.af,
+	NewAf=?RANDCHOOSE(Afs),
+	MutatedNeuron=Neuron#neuron{af=NewAf},
+	Mutation = #{type => activation_function, neuron_id => Neuron#neuron.id, old_af => OldAf, new_af => NewAf},
+	{Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}, Mutations ++ [Mutation]}.
 
-add_neuro_link(Genotype,Constraint)->%link tra neuroni,o su se stesso oppure con un altro neurone in qualsiasi strato.
+add_neuro_link({Genotype, Mutations}, Constraint)->%link tra neuroni,o su se stesso oppure con un altro neurone in qualsiasi strato.
 	{plast,Plasts}=lists:keyfind(plast,1,Constraint),
 	#genotype{neurons=Neurons}=Genotype,
 	NeuronIn=?RANDCHOOSE(Neurons),
@@ -115,11 +129,12 @@ add_neuro_link(Genotype,Constraint)->%link tra neuroni,o su se stesso oppure con
 				{NewNeuron1,NewNeuron2}=connect(NeuronIn,NeuronOut,Plasts),
 				[NewNeuron1,NewNeuron2]
 			end,
-			Genotype#genotype{neurons=lists:keysort(3,MutatedNeurons++RemainNeurons)};
-		true->Genotype
+			Mutation = #{type => neuro_link, link_from => NeuronIn#neuron.id, link_to => NeuronOut#neuron.id},
+			{Genotype#genotype{neurons=lists:keysort(3,MutatedNeurons++RemainNeurons)}, Mutations ++ [Mutation]};
+		true->{Genotype, Mutations}
 	end.
 
-add_sensor_link(Genotype,Constraint)->
+add_sensor_link({Genotype, Mutations}, Constraint)->
 	{plast,Plasts}=lists:keyfind(plast,1,Constraint),
 	#genotype{cortex=Cortex,sensors=Sensors,neurons=Neurons}=Genotype,
 	{SensorId,NeuronId}={?RANDCHOOSE(Cortex#cortex.sensorsIds),?RANDCHOOSE(Cortex#cortex.neuronsIds)},
@@ -130,11 +145,12 @@ add_sensor_link(Genotype,Constraint)->
 	case exist_link([Sensor,Neuron]) of
 		false->
 			{NewSensor,NewNeuron}=connect(Sensor,Neuron,Plasts),
-			Genotype#genotype{sensors=OtherSensors++[NewSensor],neurons=lists:keysort(3,[NewNeuron]++OtherNeurons)};
-		true->Genotype
+			Mutation = #{type => sensor_link, link_from => Sensor#sensor.id, link_to => Neuron#neuron.id},
+			{Genotype#genotype{sensors=OtherSensors++[NewSensor],neurons=lists:keysort(3,[NewNeuron]++OtherNeurons)}, Mutations ++ [Mutation]};
+		true->{Genotype, Mutations}
 	end.
 
-add_neuron(Genotype,Constraint)->
+add_neuron({Genotype, Mutations}, Constraint)->
 	{plast,Plasts}=lists:keyfind(plast,1,Constraint),
 	{af,Afs}=lists:keyfind(af,1,Constraint),
 	#genotype{sensors=Sensors,neurons=Neurons,cortex=Cortex}=Genotype,
@@ -153,7 +169,8 @@ add_neuron(Genotype,Constraint)->
 					{NewSensor,NewNeuronConnIn}=connect(Sensor,NewNeuron,Plasts),
 					{NewConnected,NewOut}=connect(NewNeuronConnIn,Neuron,Plasts),
 					NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
-					Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex};
+					Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron.id, connected_with => {Sensor#sensor.id, Neuron#neuron.id}},
+					{Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex}, Mutations ++ [Mutation]};
 				_->
 					NeuronSup=?RANDCHOOSE([N||N<-Neurons,N#neuron.layer>L]),%seleziono un neurone da uno strato superiore
 					NeuronInf=?RANDCHOOSE([N||N<-Neurons,N#neuron.layer<L]),%seleziono un neurone da uno strato inferiore
@@ -161,11 +178,12 @@ add_neuron(Genotype,Constraint)->
 					{NewInf,NewNeuronConnIn}=connect(NeuronInf,NewNeuron,Plasts),
 					{NewConnected,NewSup}=connect(NewNeuronConnIn,NeuronSup,Plasts),
 					NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
-					Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}
+					Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron.id, connected_with => {NeuronInf#neuron.id, NeuronSup#neuron.id}},
+					{Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}, Mutations ++ [Mutation]}
 			end
 	end.
 
-add_layer_neuron(Genotype,Constraint)->%aggiunge un nuovo strato tra due strati con un nuovo neurone connesso
+add_layer_neuron({Genotype, Mutations}, Constraint)->%aggiunge un nuovo strato tra due strati con un nuovo neurone connesso
 	{plast,Plasts}=lists:keyfind(plast,1,Constraint),
 	{af,Afs}=lists:keyfind(af,1,Constraint),
 	#genotype{sensors=Sensors,neurons=Neurons,cortex=Cortex}=Genotype,
@@ -181,7 +199,8 @@ add_layer_neuron(Genotype,Constraint)->%aggiunge un nuovo strato tra due strati 
 			{NewSensor,NewNeuronConnIn}=connect(Sensor,NewNeuron,Plasts),
 			{NewConnected,NewOut}=connect(NewNeuronConnIn,Neuron,Plasts),
 			NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
-			Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex};
+			Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron.id, connected_with => {Sensor#sensor.id, Neuron#neuron.id}},
+			{Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex}, Mutations ++ [Mutation]};
 		Layers->%altrimenti
 			L=?RANDCHOOSE(lists:droplast(Layers)),%seleziona uno strato interno tranne l'ultimo
 			case ?RANDCHOOSE([0,1]) of%lancio una moneta
@@ -197,7 +216,8 @@ add_layer_neuron(Genotype,Constraint)->%aggiunge un nuovo strato tra due strati 
 							{NewSensor,NewNeuronConnIn}=connect(Sensor,NewNeuron,Plasts),
 							{NewConnected,NewOut}=connect(NewNeuronConnIn,SupNeuron,Plasts),
 							NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
-							Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex};
+							Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron.id, connected_with => {Sensor#sensor.id, SupNeuron#neuron.id}},
+							{Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex}, Mutations ++ [Mutation]};
 						_->
 						{InfLayers,_}=lists:splitwith(fun(N)->N<L end,Layers--[L]),%prendi gli strati inferiori
 						LastLayer=lists:last(InfLayers),
@@ -209,7 +229,8 @@ add_layer_neuron(Genotype,Constraint)->%aggiunge un nuovo strato tra due strati 
 						{NewInf,NewNeuronConnIn}=connect(InfNeuron,NewNeuron,Plasts),
 						{NewConnected,NewSup}=connect(NewNeuronConnIn,SupNeuron,Plasts),
 						NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
-						Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}
+						Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron.id, connected_with => {InfNeuron#neuron.id, SupNeuron#neuron.id}},
+						{Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}, Mutations ++ [Mutation]}
 					end;
 				1->%lo inserisco dopo di L
 					{_,SupLayers}=lists:splitwith(fun(N)->N<L end,Layers--[L]),%prendi gli strati superiori
@@ -222,7 +243,8 @@ add_layer_neuron(Genotype,Constraint)->%aggiunge un nuovo strato tra due strati 
 					{NewInf,NewNeuronConnIn}=connect(InfNeuron,NewNeuron,Plasts),
 					{NewConnected,NewSup}=connect(NewNeuronConnIn,SupNeuron,Plasts),
 					NewCortex=Cortex#cortex{neuronsIds=Cortex#cortex.neuronsIds++[NewNeuron#neuron.id]},
-					Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}
+					Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron.id, connected_with => {InfNeuron#neuron.id, SupNeuron#neuron.id}},
+					{Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}, Mutations ++ [Mutation]}
 			end
 	end.	
 

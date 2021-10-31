@@ -1,4 +1,4 @@
--module(actuatorPheno).
+-module(actuator).
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
 -record(state,{scapeId,received,genotype}).
@@ -26,8 +26,9 @@ handle_cast({neuron,Term,NId,forward_fit,Signal},State)->
 	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
-					OrderedSignal=order(Ins,NewRecv),
-					ProcessedSignal=eval_funs(OrderedSignal,Funs),
+					OrderedSignal = nn_service:order_by_keylist(Ins, NewRecv),
+					% Function pipes are function that take a vector of numbers
+					ProcessedSignal = nn_service:apply_directives_pipe(OrderedSignal, Funs),
 					%io:fwrite("SIGNAL: ~p~n",[utils:get_BMU(ProcessedSignal)]),
 					{Flag,Msg}=gen_server:call(Scape,{action_fit,ProcessedSignal},infinity),
 					gen_server:cast(CortexId,{fit,Id,Flag,Msg}),
@@ -42,8 +43,9 @@ handle_cast({neuron,Term,NId,forward_fit_predict,Signal},State)->
 	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
-					OrderedSignal=order(Ins,NewRecv),
-					ProcessedSignal=eval_funs(OrderedSignal,Funs),
+					OrderedSignal = nn_service:order_by_keylist(Ins, NewRecv),
+					% Function pipes are function that take a vector of numbers
+					ProcessedSignal = nn_service:apply_directives_pipe(OrderedSignal, Funs),
 					{Flag,Msg}=gen_server:call(Scape,{action_fit_predict,ProcessedSignal},infinity),
 					gen_server:cast(CortexId,{fit_predict,Id,Flag,Msg}),
 					State#state{received=[]};
@@ -57,8 +59,9 @@ handle_cast({neuron,Term,NId,forward_predict,Signal},State)->
 	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
-					OrderedSignal=order(Ins,NewRecv),
-					ProcessedPred=eval_funs(OrderedSignal,Funs),
+					OrderedSignal = nn_service:order_by_keylist(Ins, NewRecv),
+					% Function pipes are function that take a vector of numbers
+					ProcessedPred = nn_service:apply_directives_pipe(OrderedSignal, Funs),
 					gen_server:call(Scape,{action_predict,ProcessedPred},infinity),
 					gen_server:cast(CortexId,{predict,Id,ProcessedPred}),
 					State#state{received=[]};
@@ -67,19 +70,3 @@ handle_cast({neuron,Term,NId,forward_predict,Signal},State)->
 			end,
 	{noreply,NewState}.
 
-order(SortList,TupleListToOrder)->
-	order(SortList,TupleListToOrder,[]).
-order([],_,Acc)->Acc;
-order([H|T],TupleListToOrder,Acc)->
-	{H,Term,Value}=lists:keyfind(H,1,TupleListToOrder),
-	order(T,TupleListToOrder,Acc++[{H,Term,Value}]).
-
-
-%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR(IS A LIST) AS FIRST ARGUMENT!!!
-eval_funs(Signal,[])->Signal;
-eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
-	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
-	eval_funs(NewSignal,T);
-eval_funs(Signal,[{Fun,ExtraArgs}|T])when is_function(Fun),is_list(ExtraArgs)->
-	NewSignal=erlang:apply(Fun,[Signal|ExtraArgs]),
-	eval_funs(NewSignal,T).

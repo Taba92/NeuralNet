@@ -1,4 +1,4 @@
--module(sensorPheno).
+-module(sensor).
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
 -record(state,{scapeId,genotype}).
@@ -23,28 +23,22 @@ handle_cast(sync_fit,State)->
 	#state{scapeId=Scape,genotype=GenoType}=State,
 	#sensor{id=Id,fit_directives=Funs,fanouts=Pids}=GenoType,
 	Signal=gen_server:call(Scape,sense),
-	ProcessedSig=eval_funs(Signal,Funs),
+	% Function pipes are function that take a vector of numbers
+	ProcessedSig = nn_service:apply_directives_pipe(Signal, Funs),
 	[gen_server:cast(Pid,{sensor,0,Id,forward_fit,ProcessedSig})||Pid<-Pids],
 	{noreply,State};
 handle_cast(sync_fit_predict,State)->
 	#state{scapeId=Scape,genotype=GenoType}=State,
 	#sensor{id=Id,fit_directives=Funs,fanouts=Pids}=GenoType,
 	Signal=gen_server:call(Scape,sense),
-	ProcessedSig=eval_funs(Signal,Funs),
+	% Function pipes are function that take a vector of numbers
+	ProcessedSig = nn_service:apply_directives_pipe(Signal, Funs),
 	[gen_server:cast(Pid,{sensor,0,Id,forward_fit_predict,ProcessedSig})||Pid<-Pids],
 	{noreply,State};
 handle_cast({sync_predict,Signal},State)->
 	#state{genotype=GenoType}=State,
 	#sensor{id=Id,real_directives=Funs,fanouts=Pids}=GenoType,
-	ProcessedSig=eval_funs(Signal,Funs),
+	% Function pipes are function that take a vector of numbers
+	ProcessedSig = nn_service:apply_directives_pipe(Signal, Funs),
 	[gen_server:cast(Pid,{sensor,0,Id,forward_predict,ProcessedSig})||Pid<-Pids],
 	{noreply,State}.
-
-%%FUNCTIONS USED TO PREPROCESS SIGNAL MUST TAKE THE SIGNAL VECTOR(VECTOR OF NUMBERS TIPICAL) AS FIRST ARGUMENT!!!
-eval_funs(Signal,[])->Signal;
-eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
-	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
-	eval_funs(NewSignal,T);
-eval_funs(Signal,[{Fun,ExtraArgs}|T])when is_function(Fun),is_list(ExtraArgs)->
-	NewSignal=erlang:apply(Fun,[Signal|ExtraArgs]),
-	eval_funs(NewSignal,T).

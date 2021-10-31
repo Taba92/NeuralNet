@@ -1,4 +1,4 @@
--module(cortexPheno).
+-module(cortex).
 -export([init/1,terminate/2]).
 -export([handle_call/3,handle_cast/2]).
 -record(state,{controllerId,received,genotype}).
@@ -40,8 +40,9 @@ handle_cast({fit,Id,Flag,Msg},State)->
 	NewRecv=Recv++[{Id,Msg}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					OrderedMsgs=order(ActuatorsIds,NewRecv),
-					ProcessedMsgs=eval_funs(OrderedMsgs,Funs),
+					OrderedMsgs = nn_service:order_by_keylist(ActuatorsIds, NewRecv),
+					%%Functions pipes are functions that takes a vector of msgs(list of maps, see scapes return)
+					ProcessedMsgs=nn_service:apply_directives_pipe(OrderedMsgs,Funs),
 					Control ! {fit,Flag,ProcessedMsgs},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
@@ -53,8 +54,9 @@ handle_cast({fit_predict,Id,Flag,Msg},State)->
 	NewRecv=Recv++[{Id,Msg}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
-					OrderedMsgs=order(ActuatorsIds,NewRecv),
-					ProcessedMsgs=eval_funs(OrderedMsgs,Funs),
+					OrderedMsgs = nn_service:order_by_keylist(ActuatorsIds, NewRecv),
+					%%Functions pipes are functions that takes a vector of msgs(list of maps, see scapes return)
+					ProcessedMsgs=nn_service:apply_directives_pipe(OrderedMsgs,Funs),
 					Control ! {fit_predict,Flag,ProcessedMsgs},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
@@ -64,29 +66,14 @@ handle_cast({predict,Id,Pred},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
 	#cortex{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
 	NewRecv=Recv++[{Id,Pred}],
-	NewState=case length(NewRecv)==length(ActuatorsIds) of
+	NewState=case length(NewRecv) == length(ActuatorsIds) of
 				true->
-					OrderedMsgs=order(ActuatorsIds,NewRecv),
-					ProcessedMsgs=eval_funs(OrderedMsgs,Funs),
+					OrderedMsgs = nn_service:order_by_keylist(ActuatorsIds, NewRecv),
+					%%Functions pipes are functions that takes a vector of msgs(list of maps, see scapes return)
+					ProcessedMsgs=nn_service:apply_directives_pipe(OrderedMsgs,Funs),
 					io:fwrite("PREDICT: ~p~n",[ProcessedMsgs]),
 					Control ! {prediction,ProcessedMsgs},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
 			end,
 	{noreply,NewState}.
-
-order(List,TupleList)->
-	order(List,TupleList,[]).
-order([],_,Acc)->Acc;
-order([H|T],TupleList,Acc)->
-	{H,Value}=lists:keyfind(H,1,TupleList),
-	order(T,TupleList,Acc++[Value]).
-
-%%FUNCTIONS USED TO POSTPROCESS SIGNAL MUST TAKE THE MSGS VECTOR(VECTOR OF MAPS TIPICAL) AS FIRST ARGUMENT!!!
-eval_funs(Signal,[])->Signal;
-eval_funs(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
-	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
-	eval_funs(NewSignal,T);
-eval_funs(Signal,[{Fun,ExtraArgs}|T])when is_function(Fun),is_list(ExtraArgs)->
-	NewSignal=erlang:apply(Fun,[Signal|ExtraArgs]),
-	eval_funs(NewSignal,T).

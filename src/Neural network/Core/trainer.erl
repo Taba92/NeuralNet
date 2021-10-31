@@ -119,7 +119,7 @@ fit_eshc(State,AlgoParameters)->
 					NewParams=maps:merge(AlgoParameters,#{bestGeno=>FittedGeno,bestFit=>Fitness,cycleEshc=>CycleEshc-1}),
 					fit_eshc(FittedState,NewParams);
 				false->
-					NewGeno=genotype_mutator:mutate(FittedGeno,NMut,Constraint),
+					{NewGeno, _} = genotype_mutator:mutate(FittedGeno,NMut,Constraint),
 					phenotype:stop_phenotype(CortexId),
 					phenotype:geno_to_pheno(NewGeno),
 					NewCortexId=genotype:get_cortex_id(NewGeno),
@@ -165,7 +165,7 @@ fit_shc(State,AlgoParameters)->
 			State#agent{genotype=FittedGeno};
 		false->
 			gen_server:call(Scape,reset),
-			#{fitness:=NewFit}=utils:apply_to_scape(fit,CortexId),
+			#{fitness:=NewFit} = nn_service:apply_to_scape(fit,CortexId),
 			io:fwrite("FITNESS: ~p~n---------------------~n",[NewFit]),
 			Prob=length(Neurons)*StepN/100,
 			{NewState,NewParameters}=case NewFit >= CurFit of
