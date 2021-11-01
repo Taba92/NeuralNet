@@ -2,6 +2,7 @@
 -export([extract_info/1, init/1, handle_call/3]).
 -define(METRICS, classification_metrics).
 -include("Scape/scape.hrl").
+-include("utils.hrl").
 
 init([Dataset, HasHeader, Labelled, Cursor, DatasetActions]) -> 
 	StartState = #state{dataset = Dataset, has_header = HasHeader, cursor = Cursor, dataset_actions = DatasetActions, 
@@ -49,10 +50,10 @@ handle_call({action_fit, Prediction},_,State) ->
 	%Extract target from the parsed record
 	{_, Target} = scape_service:extract_features_and_target(Labelled, ParsedRecord),
 	#{encoding := Encoding, len := Len, classes := Classes} = MapInfo,
-	Encode = preprocess:encode(Target, Encoding),
+	Encode = ?DATA_PROCESSING_MODULE:encode(Target, Encoding),
 	PartialLoss = ?METRICS:cross_entropy(Encode, Prediction),
-	PartialFit = 1 - ?METRICS:manhattan_avg(Encode, Prediction),
-	ClassChoose = preprocess:decode(preprocess:mostLikely(Prediction), Encoding),
+	PartialFit = 1 - math_utils:manhattan_distance(Encode, Prediction),
+	ClassChoose = ?DATA_PROCESSING_MODULE:decode(?DATA_PROCESSING_MODULE:most_likely(Prediction), Encoding),
 	UpdateMatrix = ?METRICS:incr_cell_matrix(Target, ClassChoose, Matrix),
 	case IsFinishedFun(Dataset, Cursor) of
 		true ->
@@ -132,7 +133,7 @@ extract_info(State) ->
 	SecondResetState = scape_service:reset_scape(FirstResetState),
 	% 5.5) Extract information specifics for the classification
 	Targets = extract_targets(SecondResetState),
-	Encoding = preprocess:one_hot(Targets),
+	Encoding = data_processing:one_hot(Targets),
 	NumClasses = length(Targets),
 	% 5.6) Reset the dataset
 	scape_service:reset_scape(FirstResetState),

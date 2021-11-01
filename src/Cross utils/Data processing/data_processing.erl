@@ -2,13 +2,16 @@
 -export([one_hot/1,label/1,decode/2,encode/2,most_likely/1,softmax/1]).
 -export([min_max_global/4,min_max_local/2,mean_global/4,mean_local/1,standardization_global/3,standardization_local/1]).
 
+%This module provides several common utility functions to change raw feature vectors into a representation 
+%that is more suitable for a neural network, tipical functions of encoding and scaling.
 one_hot(Targets)when is_list(Targets)->
 	one_hot(Targets,length(Targets),1,[]).
 one_hot([],_,_,Acc)->Acc;
 one_hot([H|T],Number,Pos,Acc)->
 	case lists:member(H,T) of
 		true->one_hot(T,Number,Pos,Acc);
-		false->Encode=lists:duplicate(Pos-1,0)++[1]++lists:duplicate(Number-Pos,0),
+		false->
+			Encode=lists:duplicate(Pos-1,0)++[1]++lists:duplicate(Number-Pos,0),
 			one_hot(T,Number,Pos+1,Acc++[{H,Encode}])
 	end.	
 
@@ -45,9 +48,8 @@ most_likely(Predict) ->
 	Label.
 
 softmax(Vector)when is_list(Vector)->
-	E = 2.71828182845904523536,
-	Den = lists:sum([math:pow(E, X) || X <- Vector]),
-	[math:pow(E,X)/Den||X<-Vector].
+	Den = lists:sum([math:exp(X) || X <- Vector]),
+	[math:exp(X)/Den||X<-Vector].
 
 min_max_global(Record,Mins,Maxs,{A,B})when is_list(Record),is_list(Mins),is_list(Maxs),A<B->
 	min_max(Record,Mins,Maxs,{A,B},[]).

@@ -1,16 +1,12 @@
 -module(genotype).
 -export([create_NN/5]).
--export([get_cortex_id/1,get_neurons_ids/1,get_sensors_ids/1,get_actuators_ids/1,get_ids/1]).
+%-export([get_cortex_id/1,get_neurons_ids/1,get_sensors_ids/1,get_actuators_ids/1,get_ids/1]).
 -export([create_neuron/2,create_weight/2,get_layers/1,get_geno_spec/1]).
 -define(LAYER(Neurons),(hd(Neurons))#neuron.layer).
 -define(NIDS(Neurons),[NeuronId||#neuron{id=NeuronId}<-Neurons]).%%get neurons ids from a list of neurons
 -include("utils.hrl").
 
-get_cortex_id(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.id.
-get_neurons_ids(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.neuronsIds.
-get_sensors_ids(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.sensorsIds.
-get_actuators_ids(Genotype)->#genotype{cortex=Cortex}=Genotype,Cortex#cortex.actuatorsIds.
-get_ids(Genotype)->get_sensors_ids(Genotype)++get_neurons_ids(Genotype)++get_actuators_ids(Genotype)++[get_cortex_id(Genotype)].
+%Genotype = {digraph, ets_vertices, ets_edges, ets_neightbours, is_cyclic}
 get_geno_spec(Genotype)->
 	#genotype{sensors=[S],actuators=[A], cortex = C} = Genotype,
 	#sensor{vl=SVl,fit_directives=SFit,real_directives=SReal}=S,
@@ -24,23 +20,29 @@ get_layers(Genotype)->
 	erlang:tl(lists:foldl(Layer,[0],Net)).
 
 
-get_net_type({ffnn,_,_})->normal;
-get_net_type({{rnn,_},_,_})->normal;
+get_net_type({ffnn,_,_}) -> normal;
+get_net_type({{rnn,_},_,_}) -> normal;
 get_net_type({som,_})->som.
 
-create_NN({som,Af},SensorSpec,ActuatorSpec,CortexSpec,Params)->create_SOM({som,Af},SensorSpec,ActuatorSpec,CortexSpec,Params);
-create_NN(Constraint,SensorSpec,ActuatorSpec,CortexSpec,Params)->create_CLASSIC(Constraint,SensorSpec,ActuatorSpec,CortexSpec,Params).
+create_NN({som,Af},SensorSpec,ActuatorSpec,CortexSpec,Params) ->
+	create_SOM({som,Af},SensorSpec,ActuatorSpec,CortexSpec,Params);
+create_NN(Constraint,SensorSpec,ActuatorSpec,CortexSpec,Params) ->
+	create_CLASSIC(Constraint,SensorSpec,ActuatorSpec,CortexSpec,Params).
 
 create_SOM(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{AFitDirectives,ARealDirectives},{CFitDirectives,CRealDirectives},{NumX,NumY})->
-	Sensor=#sensor{id=?GETID,vl=SensorVl,fit_directives=SFitDirectives,real_directives=SRealDirectives},
-	Actuator=#actuator{id=?GETID,vl=NumX*NumY,fit_directives=AFitDirectives,real_directives=ARealDirectives},
-	{ConnSensor,Net,ConnActuator}=create_neuro_net(Constraint,{Sensor,[],Actuator},{NumX,NumY},0),
-	SensorsIds=[SId||#sensor{id=SId}<-[Sensor]],
-	NetIds=[NId||#neuron_som{id=NId}<-Net],
-	ActuatorsIds=[AId||#actuator{id=AId}<-[Actuator]],
-	Cortex=#cortex{id=?GETID,fit_directives=CFitDirectives,real_directives=CRealDirectives,sensorsIds=SensorsIds,neuronsIds=NetIds,actuatorsIds=ActuatorsIds},
-	NewActuator=ConnActuator#actuator{cortexId=Cortex#cortex.id},
-	#genotype{type=get_net_type(Constraint),sensors=[ConnSensor],neurons=Net,actuators=[NewActuator],cortex=Cortex}.
+	Genotype = digraph:new(),
+	Sensor = #sensor{id = ?GETID, vl = SensorVl, fit_directives = SFitDirectives, real_directives = SRealDirectives},
+	Actuator = #actuator{id = ?GETID, vl = NumX * NumY, fit_directives = AFitDirectives, real_directives = ARealDirectives},
+	digraph:add_vertex(Genotype, Sensor#sensor.id, Sensor),
+	digraph:add_vertex(Genotype, Actuator#actuator.id, Actuator),
+	create_neuro_net(Constraint, Genotype, {NumX,NumY}, 0),
+	%SensorsIds=[SId||#sensor{id=SId}<-[Sensor]],
+	%NetIds=[NId||#neuron_som{id=NId}<-Net],
+	%ActuatorsIds=[AId||#actuator{id=AId}<-[Actuator]],
+	%Cortex=#cortex{id=?GETID,fit_directives=CFitDirectives,real_directives=CRealDirectives,sensorsIds=SensorsIds,neuronsIds=NetIds,actuatorsIds=ActuatorsIds},
+	%NewActuator=ConnActuator#actuator{cortexId=Cortex#cortex.id},
+	%#genotype{type=get_net_type(Constraint),sensors=[ConnSensor],neurons=Net,actuators=[NewActuator],cortex=Cortex}.
+	Genotype.
 
 create_CLASSIC({rnn,Af,Plast},SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity)->
 	create_CLASSIC({{rnn,0},Af,Plast},SensorSpec,ActuatorSpec,CortexSpec,HiddenLayerDensity);
@@ -57,17 +59,22 @@ create_CLASSIC(Constraint,{SensorVl,SFitDirectives,SRealDirectives},{ActuatorVl,
 	#genotype{type=get_net_type(Constraint),sensors=[ConnSensor],neurons=Net,actuators=[NewActuator],cortex=Cortex}.
 
 %som
-create_neuro_net({som,Af},{Sensor,[],Actuator},{NumX,NumY},0)->
-	FirstLayer=[create_neuron_som(Af,0,Y,Sensor,Actuator)||Y<-lists:seq(0,NumY-1)],
-	ConnNet=connect_on_x(FirstLayer),
-	create_neuro_net({som,Af},{Sensor,ConnNet,Actuator},{NumX,NumY},1);
+create_neuro_net({som , ActivationFunction}, {Genotype, InputLength}, {NumX, NumY}, 0) ->
+	% Create the first layer of neurons
+	FirstLayer = [create_neuron_som(ActivationFunction, 0, Y) || Y <- lists:seq(0, NumY - 1)],
+	% Add the first layer in the genotype
+	[digraph:add_vertex(Neuron#neuron_som.id, Neuron) || Neuron <- FirstLayer],
+	% Connect the first layer on the y axis
+	
+	ConnNet = connect_on_x(FirstLayer),
+	create_neuro_net({som, ActivationFunction},{Genotype, InputLength}, {NumX, NumY}, 1);
 create_neuro_net({som,Af},{Sensor,Net,Actuator},{NumX,NumY},X)when X<NumX-1->
-	CurrentLayerNet=[create_neuron_som(Af,X,Y,Sensor,Actuator)||Y<-lists:seq(0,NumY-1)],
+	CurrentLayerNet=[create_neuron_som(Af,X,Y)||Y<-lists:seq(0,NumY-1)],
 	ConnCurrent=connect_on_x(CurrentLayerNet),
 	{UpdateNet,ConnNet}=connect_on_y(Net,ConnCurrent,X),
 	create_neuro_net({som,Af},{Sensor,UpdateNet++ConnNet,Actuator},{NumX,NumY},X+1);
 create_neuro_net({som,Af},{Sensor,Net,Actuator},{NumX,NumY},X)when X==NumX-1->
-	CurrentLayerNet=[create_neuron_som(Af,X,Y,Sensor,Actuator)||Y<-lists:seq(0,NumY-1)],
+	CurrentLayerNet=[create_neuron_som(Af,X,Y)||Y<-lists:seq(0,NumY-1)],
 	ConnCurrent=connect_on_x(CurrentLayerNet),
 	{UpdateNet,ConnNet}=connect_on_y(Net,ConnCurrent,X),
 	ConnSensor=Sensor#sensor{fanouts=[Id||#neuron_som{id=Id}<-UpdateNet++ConnNet]},
@@ -156,10 +163,8 @@ connect_RNN(D,OtherLayers,Plast,LastLayer)when is_record(hd(OtherLayers),neuron)
 
 create_neuron(Af,Layer)->
 	#neuron{id=?GETID,layer=Layer,af=Af,bias=?RAND,faninsWeights=[],fanouts=[],roinsWeights=[],roouts=[]}.
-create_neuron_som(Af,X,Y,Sensor,Actuator)->
-	#sensor{vl=Vl}=Sensor,
-	#actuator{id=Id}=Actuator,
-	#neuron_som{id=?GETID,coordinates={X,Y},af=Af,weight=[?RAND||_<-lists:seq(1,Vl)],fanouts=[Id]}.
+create_neuron_som(ActivationFunction, X, Y)->
+	#neuron_som{id = ?GETID, coordinates = {X, Y}, af = ActivationFunction}.
 
 create_weight(Plast,#sensor{id=Id,vl=Vl})->
 	Weight=[?RAND||_<-lists:seq(1,Vl)],
@@ -169,3 +174,77 @@ create_weight(Plast,#neuron{id=Id})->
 	Weight=[?RAND],
 	Modulation=plasticity:get_plasticity(Weight,Plast),
 	{Id,Weight,Modulation}.
+
+% som utilities
+
+% modular functions TODO: Vanno implementate
+
+get_elements_filtered(Genotype, Predicate) ->
+	{digraph, Vertices, _, _, _} = Genotype,
+	Filter = fun(El, Acc) ->
+			case Predicate(El) of
+				true -> [El | Acc];
+				false -> Acc
+			end
+		end,
+	ets:foldl(Filter, [], Vertices).
+
+get_select_on_elements_filtered(Genotype, Predicate, SelectFunction) ->
+	{digraph, Vertices, _, _, _} = Genotype,
+	Filter = fun(El, Acc) ->
+			case Predicate(El) of
+				true -> [SelectFunction(El) | Acc];
+				false -> Acc
+			end
+		end,
+	ets:foldl(Filter, [], Vertices).
+get_element_by_id(Genotype, ElementId) ->
+	digraph:vertex(Genotype, ElementId).
+
+get_sensors(Genotype) ->
+	Predicate = fun(El) -> is_record(El, sensor) end,
+	get_elements_filtered(Genotype, Predicate).
+
+get_sensors_ids(Genotype) ->
+	Predicate = fun(El) -> is_record(El, sensor) end,
+	Select = fun(#sensor{id = Id}) -> Id end,
+	get_select_on_elements_filtered(Genotype, Predicate, Select).
+get_actuators(Genotype) ->
+	Predicate = fun(El) -> is_record(El, actuator) end,
+	get_elements_filtered(Genotype, Predicate).
+get_actuators_ids(Genotype) ->
+	Predicate = fun(El) -> is_record(El, actuator) end,
+	Select = fun(#actuator{id = Id}) -> Id end,
+	get_select_on_elements_filtered(Genotype, Predicate, Select).
+
+get_neuron_ids(Genotype, som) ->
+	Predicate = fun(El) -> is_record(El, neuron_som) end,
+	Select = fun(#neuron_som{id = Id}) -> Id end,
+	get_select_on_elements_filtered(Genotype, Predicate, Select);
+get_neuron_ids(Genotype, classic) ->
+	Predicate = fun(El) -> is_record(El, neuron) end,
+	Select = fun(#neuron{id = Id}) -> Id end,
+	get_select_on_elements_filtered(Genotype, Predicate, Select).
+
+get_neurons(Genotype, som) ->
+	Predicate = fun(El) -> is_record(El, neuron_som) end,
+	get_elements_filtered(Genotype, Predicate);
+get_neurons(Genotype, classic) ->
+	Predicate = fun(El) -> is_record(El, neuron) end,
+	get_elements_filtered(Genotype, Predicate).
+
+get_cortex(Genotype) ->
+	Predicate = fun(El) -> is_record(El, cortex) end,
+	get_elements_filtered(Genotype, Predicate).
+
+get_cortex_id(Genotype) ->
+	[Cortex] = get_cortex(Genotype),
+	#cortex{id = Id} = Cortex,
+	Id.
+
+get_connection(Genotype, IdFrom, IdTo) ->
+	EdgeId = {IdFrom, IdTo},
+	{EdgeId, IdFrom, IdTo, EdgeInfo} = digraph:edge(Genotype, EdgeId),
+	EdgeInfo.
+
+

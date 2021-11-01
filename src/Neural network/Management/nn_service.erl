@@ -26,7 +26,8 @@ apply_to_scape(fit,CortexId)->
 	gen_server:cast(CortexId,fit_cycle),
 	receive
 		{fit,another,_}->apply_to_scape(fit,CortexId);
-		{fit,finish,Msg}->Msg
+		{fit,finish,Msg}->
+			Msg
 	end;
 apply_to_scape(fit_predict,CortexId)->
 	gen_server:cast(CortexId,fit_predict_cycle),

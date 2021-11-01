@@ -37,12 +37,13 @@ handle_cast(fit_predict_cycle,State)->
 handle_cast({fit,Id,Flag,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
 	#cortex{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
-	NewRecv=Recv++[{Id,Msg}],
+	NewRecv = Recv ++ [{Id, null, Msg}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
 					OrderedMsgs = nn_service:order_by_keylist(ActuatorsIds, NewRecv),
+					Msgs = [Message || {_, _, Message} <- OrderedMsgs],
 					%%Functions pipes are functions that takes a vector of msgs(list of maps, see scapes return)
-					ProcessedMsgs=nn_service:apply_directives_pipe(OrderedMsgs,Funs),
+					ProcessedMsgs=nn_service:apply_directives_pipe(Msgs,Funs),
 					Control ! {fit,Flag,ProcessedMsgs},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
@@ -51,12 +52,13 @@ handle_cast({fit,Id,Flag,Msg},State)->
 handle_cast({fit_predict,Id,Flag,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
 	#cortex{real_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
-	NewRecv=Recv++[{Id,Msg}],
+	NewRecv = Recv ++ [{Id, null, Msg}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
 					OrderedMsgs = nn_service:order_by_keylist(ActuatorsIds, NewRecv),
+					Msgs = [Message || {_, _, Message} <- OrderedMsgs],
 					%%Functions pipes are functions that takes a vector of msgs(list of maps, see scapes return)
-					ProcessedMsgs=nn_service:apply_directives_pipe(OrderedMsgs,Funs),
+					ProcessedMsgs = nn_service:apply_directives_pipe(Msgs,Funs),
 					Control ! {fit_predict,Flag,ProcessedMsgs},
 					State#state{received=[]};
 				false->State#state{received=NewRecv}
@@ -65,12 +67,13 @@ handle_cast({fit_predict,Id,Flag,Msg},State)->
 handle_cast({predict,Id,Pred},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
 	#cortex{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
-	NewRecv=Recv++[{Id,Pred}],
+	NewRecv = Recv ++ [{Id, null, Pred}],
 	NewState=case length(NewRecv) == length(ActuatorsIds) of
 				true->
 					OrderedMsgs = nn_service:order_by_keylist(ActuatorsIds, NewRecv),
+					Msgs = [Message || {_, _, Message} <- OrderedMsgs],
 					%%Functions pipes are functions that takes a vector of msgs(list of maps, see scapes return)
-					ProcessedMsgs=nn_service:apply_directives_pipe(OrderedMsgs,Funs),
+					ProcessedMsgs=nn_service:apply_directives_pipe(Msgs,Funs),
 					io:fwrite("PREDICT: ~p~n",[ProcessedMsgs]),
 					Control ! {prediction,ProcessedMsgs},
 					State#state{received=[]};

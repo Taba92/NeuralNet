@@ -54,7 +54,7 @@ handle_cast({ElType,FromLayer,IdFrom,FwdType,Signal},State)when ElType==sensor;E
 	NewState=case length(PrunRecv)==length(Ins) andalso length(PrunRoRecv)==length(RoIns) of
 		        	true->
 		        		Dot=aggregate(PrunRecv,Ins)+aggregate(PrunRoRecv,RoIns),
-						OutPut=af:Af(Dot+Bias),
+						OutPut = ?ACTIVATION_FUNCTION_MODULE:Af(Dot+Bias),
 						NewGenotype=learn(GenoType,[OutPut],PrunRecv,PrunRoRecv),
 						[gen_server:cast(Pid,{neuron,Layer,Id,FwdType,[OutPut]})||Pid<-Outs++RoOuts],
 						State#state{lastOutput={Dot,OutPut},lastSignals={PrunRecv,PrunRoRecv},received=[],roreceived=[],genotype=NewGenotype};
@@ -86,11 +86,11 @@ perturbate_weight({Id,Weight,Modulator},Sup)->
 	end.
 
 perturbate_vals([]) -> [];
-perturbate_vals([H|T]) -> [utils:perturbate(H) | perturbate_vals(T)].
+perturbate_vals([H|T]) -> [?NN_SERVICE_MODULE:perturbate(H) | perturbate_vals(T)].
 
 perturbate_bias(Val,Sup)->
 	case ?PROB(Sup) of
-		true->utils:perturbate(Val);
+		true->?NN_SERVICE_MODULE:perturbate(Val);
 		false->Val
 	end.
 

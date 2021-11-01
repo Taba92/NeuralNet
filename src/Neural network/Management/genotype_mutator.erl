@@ -47,7 +47,7 @@ mutate(Genotype,NMutation,Constraint)->
 
 
 parse_constraint(none) ->
-	{get_mutators(), [{af, af:all_activation_functions_classic()}, {plast, plasticity:all()}]};
+	{get_mutators(), [{af, ?ACTIVATION_FUNCTION_MODULE:all_activation_functions_classic()}, {plast, plasticity:all()}]};
 parse_constraint(#{mutators := none, af := none, plast := none}) -> 
 	parse_constraint(none);
 parse_constraint(#{mutators := none, af := Afs , plast := Plasts}) when is_list(Afs),is_list(Plasts) ->
@@ -55,13 +55,13 @@ parse_constraint(#{mutators := none, af := Afs , plast := Plasts}) when is_list(
 parse_constraint(#{mutators := none, af := Afs, plast := none}) when is_list(Afs) ->
 	{get_mutators(), [{af, Afs}, {plast, plasticity:all()}]};
 parse_constraint(#{mutators := none, af := none, plast := Plasts}) when is_list(Plasts) ->
-	{get_mutators(), [{af, af:all_activation_functions_classic()}, {plast, Plasts}]};
+	{get_mutators(), [{af, ?ACTIVATION_FUNCTION_MODULE:all_activation_functions_classic()}, {plast, Plasts}]};
 parse_constraint(#{mutators := Mutators, af := none, plast := Plasts}) when is_list(Mutators),is_list(Plasts) ->
-	{Mutators, [{af, af:all_activation_functions_classic()}, {plast, Plasts}]};
+	{Mutators, [{af, ?ACTIVATION_FUNCTION_MODULE:all_activation_functions_classic()}, {plast, Plasts}]};
 parse_constraint(#{mutators := Mutators, af := Afs, plast := none}) when is_list(Mutators),is_list(Afs) ->
 	{Mutators, [{af, Afs}, {plast, plasticity:all()}]};
 parse_constraint(#{mutators := Mutators, af := none, plast := none}) when is_list(Mutators) ->
-	{Mutators, [{af, af:all_activation_functions_classic()}, {plast, plasticity:all()}]};
+	{Mutators, [{af, ?ACTIVATION_FUNCTION_MODULE:all_activation_functions_classic()}, {plast, plasticity:all()}]};
 parse_constraint(#{mutators := Mutators, af := Afs, plast := Plasts}) when is_list(Mutators),is_list(Afs),is_list(Plasts) ->
 	{Mutators, [{af, Afs}, {plast, Plasts}]}.
 

@@ -30,7 +30,7 @@ handle_call({set_scape,ScapeId},_,State)->
 	{reply,ok,State#agent{scape=ScapeId}};
 handle_call(fit_predict,_,State)->
 	#agent{cortexId=CortexId}=State,
-	utils:apply_to_scape(fit_predict,CortexId),
+	?NN_SERVICE_MODULE:apply_to_scape(fit_predict,CortexId),
 	{reply,ok,State};
 handle_call({predict,Signal},_,State)->
 	#agent{cortexId=CortexId}=State,

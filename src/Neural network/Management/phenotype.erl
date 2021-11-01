@@ -4,7 +4,7 @@
 -export([link_to_cortex/2,link_nn_to_scape/2]).
 -include("utils.hrl").
 
-get_neuron_pheno(normal)->neuronPheno;
+get_neuron_pheno(normal)->neuron;
 get_neuron_pheno(som)->neuron_som.
 
 link_to_cortex(Agent,CortexId)->
@@ -21,10 +21,10 @@ geno_to_pheno(GenoType)when is_record(GenoType,genotype)->
 	#genotype{type=Type}=GenoType,
 	NeuronPhenoType=get_neuron_pheno(Type),
 	#genotype{sensors=SensorsGeno,neurons=NetGeno,actuators=ActuatorsGeno,cortex=CortexGeno}=GenoType,
-	[sensorPheno:init(Sensor)||Sensor<-SensorsGeno],
+	[sensor:init(Sensor)||Sensor<-SensorsGeno],
 	[NeuronPhenoType:init(Neuron)||Neuron<-NetGeno],
-	[actuatorPheno:init(Actuator)||Actuator<-ActuatorsGeno],
-	cortexPheno:init(CortexGeno).
+	[actuator:init(Actuator)||Actuator<-ActuatorsGeno],
+	cortex:init(CortexGeno).
 
 pheno_to_geno(CortexId)->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),

@@ -1,5 +1,7 @@
--module(statistic_utils).
+-module(casuality_utils).
 -export([rand_choose/1, prob_on_range/1]).
+
+%This module provide functions inherent to stocastich events, like a launch of a dice ecc..
 
 %%Given a List, return a random element of the List
 rand_choose(List) when is_list(List) ->

@@ -2,13 +2,13 @@
 -include("utils.hrl").
 % General math utilities
 -export([catch_overflow/2, saturate/3]).
-% Activation functions for neurons
+% Activation functions for neurons, scalar algebra
 -export([all_activation_functions_classic/0,tanh/1,threshold/1,identity/1,rectifier/1,sigmund/1,derivate/2]).
--export([all_activation_functions_som/0, euclidean/2]).
-% Vectors operations
+-export([all_activation_functions_som/0, euclidean/2, manhattan_distance/2]).
+% Vectors algebra operations
 -export([lists_elements_dot/2, lists_elements_sum/2, lists_elements_sub/2]).
 
-% Section of general math utilities
+% Section of general math algebra utilities
 %%Try to perform an Operation and in case of overflow error it return the OverFlowOutPut
 catch_overflow(Operation, OverFlowOutPut) when is_function(Operation) ->
     try
@@ -43,11 +43,11 @@ rectifier(X) when is_number(X) ->
 identity(X) when is_number(X) -> 
 	X.
 sigmund(X) when is_number(X) ->
-	Function = fun() ->  1 / (1 + math:pow(?E, -X)) end,
+	Function = fun() ->  1 / (1 + math:exp(-X)) end,
 	math_utils:catch_overflow(Function, 0).
 
 tanh(X) when is_number(X) -> 
-	(math:pow(?E, X) - math:pow(?E, -X)) / (math:pow(?E, X) + math:pow(?E, -X)).
+	(math:exp(X) - math:exp(-X)) / (math:exp(X) + math:exp(-X)).
 
 
 %%It perform derivate function of given function name on input X
@@ -72,7 +72,7 @@ derivate(threshold, X) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %%%%%%%%%%%%%%%%%%%%%%%%FOR SOM NEURONS%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-all_activation_functions_som()->[euclidean].
+all_activation_functions_som()->[euclidean, manhattan_distance].
 
 euclidean(Vector1, Vector2) when is_list(Vector1), is_list(Vector2) -> 
 	euclidean(Vector1, Vector2, 0).
@@ -81,6 +81,15 @@ euclidean([W | RestWeight], [S | RestSignal], Acc) when is_number(W), is_number(
 	euclidean(RestWeight, RestSignal, Acc + EuclideanDistance);
 euclidean([],[],Acc) when is_number(Acc) -> 
 	math:sqrt(Acc).
+
+manhattan_distance(Target,Predict) -> 
+	manhattan(Target, Predict) / length(Target).
+
+manhattan(Target,Predict)->manhattan(Target,Predict,0).
+manhattan([T|Tgs],[P|Preds],Acc)->
+	Dist=erlang:abs(T-P),
+	manhattan(Tgs,Preds,Acc+Dist);
+manhattan([],[],Acc)->Acc.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %

@@ -1,6 +1,6 @@
 -module(classification_metrics).
 -export([create_matrix_confusion/1,extract_info_label/2,incr_cell_matrix/3]).
--export([f1_score_avg/2,cross_entropy/2,manhattan_avg/2]).
+-export([f1_score_avg/2,cross_entropy/2]).
 -include("utils.hrl").
 
 
@@ -26,14 +26,6 @@ cross_entropy([T|Tgs],[P|Preds],Acc)->
 	Entropy=T*math:log(P+?MINPERTURB),
 	cross_entropy(Tgs,Preds,Acc+Entropy);
 cross_entropy([],[],Acc)->-Acc.
-
-manhattan_avg(Target,Predict)->manhattan(Target,Predict)/length(Target).
-
-manhattan(Target,Predict)->manhattan(Target,Predict,0).
-manhattan([T|Tgs],[P|Preds],Acc)->
-	Dist=erlang:abs(T-P),
-	manhattan(Tgs,Preds,Acc+Dist);
-manhattan([],[],Acc)->Acc.
 
 create_matrix_confusion(Labels)->[{Label,[{OtherLabel,0}||OtherLabel<-Labels]}||Label<-Labels].
 
