@@ -3,9 +3,10 @@
 -export([handle_cast/2,handle_call/3]).
 -record(state,{scapeId,received,genotype}).
 -include("utils.hrl").
+-include("phenotype.hrl").
 
-init(GenoType)when is_record(GenoType,actuator)->
-	#actuator{id=Id}=GenoType,
+init(GenoType)when is_record(GenoType,actuator_phenotype)->
+	#actuator_phenotype{id=Id}=GenoType,
 	gen_server:start_link({local,Id},?MODULE,[GenoType],[]);
 init([GenoType])->
 	State=#state{received=[],genotype=GenoType},
@@ -22,7 +23,7 @@ terminate(normal,_)->ok.
 
 handle_cast({neuron,Term,NId,forward_fit,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator{id=Id,vl=Vl,fit_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
+	#actuator_phenotype{id=Id,vl=Vl,fit_directives=Funs,fanins=Ins,cortex_id=CortexId}=GenoType,
 	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
@@ -39,7 +40,7 @@ handle_cast({neuron,Term,NId,forward_fit,Signal},State)->
 	{noreply,NewState};
 handle_cast({neuron,Term,NId,forward_fit_predict,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
+	#actuator_phenotype{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortex_id=CortexId}=GenoType,
 	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->
@@ -55,7 +56,7 @@ handle_cast({neuron,Term,NId,forward_fit_predict,Signal},State)->
 	{noreply,NewState};
 handle_cast({neuron,Term,NId,forward_predict,Signal},State)->
 	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortexId=CortexId}=GenoType,
+	#actuator_phenotype{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortex_id=CortexId}=GenoType,
 	NewRecv=Recv++[{NId,Term,Signal}],
 	NewState=case length(NewRecv)==Vl of
 				true->

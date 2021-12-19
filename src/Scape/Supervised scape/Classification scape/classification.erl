@@ -133,7 +133,7 @@ extract_info(State) ->
 	SecondResetState = scape_service:reset_scape(FirstResetState),
 	% 5.5) Extract information specifics for the classification
 	Targets = extract_targets(SecondResetState),
-	Encoding = data_processing:one_hot(Targets),
+	Encoding = data_processing:one_hot_encoding(Targets),
 	NumClasses = length(Targets),
 	% 5.6) Reset the dataset
 	scape_service:reset_scape(FirstResetState),

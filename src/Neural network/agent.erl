@@ -1,6 +1,7 @@
 -module(agent).
 -export([init/1,handle_call/3,terminate/2]).
 -include("utils.hrl").
+-include("phenotype.hrl").
 
 init([Id,Genotype,Fitness])->
 	phenotype:geno_to_pheno(Genotype),
@@ -9,7 +10,7 @@ init([Id,Genotype,Fitness])->
 	{ok,State}.
 
 terminate(normal,State)->
-	#agent{cortexId=CortexId}=State,
+	#agent{cortex_id = CortexId}=State,
 	phenotype:stop_phenotype(CortexId).
 
 handle_call({save_nn,FileName},_,State)->
@@ -29,11 +30,11 @@ handle_call({set_scape,ScapeId},_,State)->
 	phenotype:link_nn_to_scape(Genotype,ScapeId),
 	{reply,ok,State#agent{scape=ScapeId}};
 handle_call(fit_predict,_,State)->
-	#agent{cortexId=CortexId}=State,
+	#agent{cortex_id = CortexId}=State,
 	?NN_SERVICE_MODULE:apply_to_scape(fit_predict,CortexId),
 	{reply,ok,State};
 handle_call({predict,Signal},_,State)->
-	#agent{cortexId=CortexId}=State,
+	#agent{cortex_id = CortexId}=State,
 	gen_server:cast(CortexId,{predict_cycle,Signal}),
 	receive {prediction,Prediction}->ok end,
 	{reply,Prediction,State};	

@@ -3,6 +3,8 @@
 -export([stop_phenotype/1,backup_weights/1,perturb_weights/1,restore_weights/1,cluster_setting/2]).
 -export([link_to_cortex/2,link_nn_to_scape/2]).
 -include("utils.hrl").
+-include("phenotype.hrl").
+-include("genotype.hrl").
 
 get_neuron_pheno(normal)->neuron;
 get_neuron_pheno(som)->neuron_som.
@@ -10,7 +12,7 @@ get_neuron_pheno(som)->neuron_som.
 link_to_cortex(Agent,CortexId)->
 	#agent{id=Id}=Agent,
 	gen_server:call(CortexId,{controller_id,Id}),
-	Agent#agent{cortexId=CortexId}.
+	Agent#agent{cortex_id=CortexId}.
 
 link_nn_to_scape(Genotype,Scape)->
 	[gen_server:call(SensorId,{set_scape,Scape})||SensorId<-genotype:get_sensors_ids(Genotype)],
@@ -18,7 +20,7 @@ link_nn_to_scape(Genotype,Scape)->
 	ok.
 
 geno_to_pheno(GenoType)when is_record(GenoType,genotype)->
-	#genotype{type=Type}=GenoType,
+	#genotype{network_type=Type}=GenoType,
 	NeuronPhenoType=get_neuron_pheno(Type),
 	#genotype{sensors=SensorsGeno,neurons=NetGeno,actuators=ActuatorsGeno,cortex=CortexGeno}=GenoType,
 	[sensor:init(Sensor)||Sensor<-SensorsGeno],
@@ -28,7 +30,7 @@ geno_to_pheno(GenoType)when is_record(GenoType,genotype)->
 
 pheno_to_geno(CortexId)->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex{sensorsIds=SensorsIds,neuronsIds=NeuronsIds,actuatorsIds=ActuatorsIds}=CortexGeno,
+	#cortex_phenotype{sensorsIds=SensorsIds,neuronsIds=NeuronsIds,actuatorsIds=ActuatorsIds}=CortexGeno,
 	SensorsGeno=[gen_server:call(SensorId,dump,infinity)||SensorId<-SensorsIds],
 	NeuronsGeno=[gen_server:call(NeuronId,dump,infinity)||NeuronId<-NeuronsIds],
 	ActuatorsGeno=[gen_server:call(ActuatorId,dump,infinity)||ActuatorId<-ActuatorsIds],
@@ -36,30 +38,30 @@ pheno_to_geno(CortexId)->
 
 stop_phenotype(CortexId)->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex{sensorsIds=SensorsIds,neuronsIds=NeuronsIds,actuatorsIds=ActuatorsIds}=CortexGeno,
+	#cortex_phenotype{sensorsIds=SensorsIds,neuronsIds=NeuronsIds,actuatorsIds=ActuatorsIds}=CortexGeno,
 	[gen_server:stop(Pid,normal,infinity)||Pid<-[CortexId]++SensorsIds++NeuronsIds++ActuatorsIds],
 	ok.
 
 backup_weights(CortexId)->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex{neuronsIds=NeuronsIds}=CortexGeno,
+	#cortex_phenotype{neuronsIds=NeuronsIds}=CortexGeno,
 	[gen_server:call(Pid,backup_weights,infinity)||Pid<-NeuronsIds],
 	ok.
 
 perturb_weights({CortexId,Prob,StepW})->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex{neuronsIds=NeuronsIds}=CortexGeno,
+	#cortex_phenotype{neuronsIds=NeuronsIds}=CortexGeno,
 	[gen_server:call(Pid,{perturb_weights,Prob,StepW},infinity)||Pid<-NeuronsIds],
 	ok.
 
 restore_weights(CortexId)->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex{neuronsIds=NeuronsIds}=CortexGeno,
+	#cortex_phenotype{neuronsIds=NeuronsIds}=CortexGeno,
 	[gen_server:call(Pid,restore_weights,infinity)||Pid<-NeuronsIds],
 	ok.
 
 cluster_setting(CortexId,Centroids)->
 	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex{neuronsIds=NeuronsIds}=CortexGeno,
+	#cortex_phenotype{neuronsIds=NeuronsIds}=CortexGeno,
 	[gen_server:call(Pid,{cluster_setting,Centroids},infinity)||Pid<-NeuronsIds],
 	ok.

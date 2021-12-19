@@ -3,6 +3,8 @@
 -define(EFF,0.1).
 -define(POP_LIMIT,20).
 -include("utils.hrl").
+-include("phenotype.hrl").
+-include("genotype.hrl").
 -record(selection,{agent,truefit,allotedOffspring,nao}).
 
 init([Name])->

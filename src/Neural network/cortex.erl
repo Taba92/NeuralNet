@@ -3,9 +3,10 @@
 -export([handle_call/3,handle_cast/2]).
 -record(state,{controllerId,received,genotype}).
 -include("utils.hrl").
+-include("phenotype.hrl").
 
-init(GenoType)when is_record(GenoType,cortex)->
-	#cortex{id=Id}=GenoType,
+init(GenoType)when is_record(GenoType,cortex_phenotype)->
+	#cortex_phenotype{id=Id}=GenoType,
 	gen_server:start_link({local,Id},?MODULE,[GenoType],[]);
 init([GenoType])->
 	State=#state{received=[],genotype=GenoType},
@@ -21,22 +22,22 @@ handle_call({controller_id,Id},_,State)->
 	
 handle_cast(fit_cycle,State)->
 	#state{genotype=GenoType}=State,
-	#cortex{sensorsIds=SensorsIds}=GenoType,
+	#cortex_phenotype{sensorsIds=SensorsIds}=GenoType,
 	[gen_server:cast(Sensor,sync_fit)||Sensor<-SensorsIds],
 	{noreply,State};
 handle_cast({predict_cycle,Signal},State)->
 	#state{genotype=GenoType}=State,
-	#cortex{sensorsIds=SensorsIds}=GenoType,
+	#cortex_phenotype{sensorsIds=SensorsIds}=GenoType,
 	[gen_server:cast(Sensor,{sync_predict,Signal})||Sensor<-SensorsIds],
 	{noreply,State};
 handle_cast(fit_predict_cycle,State)->
 	#state{genotype=GenoType}=State,
-	#cortex{sensorsIds=SensorsIds}=GenoType,
+	#cortex_phenotype{sensorsIds=SensorsIds}=GenoType,
 	[gen_server:cast(Sensor,sync_fit_predict)||Sensor<-SensorsIds],
 	{noreply,State};
 handle_cast({fit,Id,Flag,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
-	#cortex{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
+	#cortex_phenotype{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
 	NewRecv = Recv ++ [{Id, null, Msg}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
@@ -51,7 +52,7 @@ handle_cast({fit,Id,Flag,Msg},State)->
 	{noreply,NewState};
 handle_cast({fit_predict,Id,Flag,Msg},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
-	#cortex{real_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
+	#cortex_phenotype{real_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
 	NewRecv = Recv ++ [{Id, null, Msg}],
 	NewState=case length(NewRecv)==length(ActuatorsIds) of
 				true->
@@ -66,7 +67,7 @@ handle_cast({fit_predict,Id,Flag,Msg},State)->
 	{noreply,NewState};
 handle_cast({predict,Id,Pred},State)->
 	#state{controllerId=Control,received=Recv,genotype=GenoType}=State,
-	#cortex{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
+	#cortex_phenotype{fit_directives=Funs,actuatorsIds=ActuatorsIds}=GenoType,
 	NewRecv = Recv ++ [{Id, null, Pred}],
 	NewState=case length(NewRecv) == length(ActuatorsIds) of
 				true->

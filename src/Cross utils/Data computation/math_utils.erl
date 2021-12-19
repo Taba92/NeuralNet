@@ -9,6 +9,7 @@
 -export([lists_elements_dot/2, lists_elements_sum/2, lists_elements_sub/2]).
 
 % Section of general math algebra utilities
+
 %%Try to perform an Operation and in case of overflow error it return the OverFlowOutPut
 catch_overflow(Operation, OverFlowOutPut) when is_function(Operation) ->
     try

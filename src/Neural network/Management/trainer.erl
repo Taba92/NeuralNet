@@ -1,6 +1,8 @@
 -module(trainer).
 -export([fit/2]).
 -include("utils.hrl").
+-include("phenotype.hrl").
+-include("genotype.hrl").
 
 fit(State,Parameters)when map_get(type,Parameters)==shc->
 	fit_shc(State,Parameters);
@@ -22,7 +24,7 @@ fit(State,Parameters)when map_get(type,Parameters)==som->
 
 %%%FIT ALGORITMHS FOR UNSUPERVISED LEARNING
 fit_som(State,AlgoParameters)->%online update
-	#agent{scape=Scape,genotype=Geno,cortexId=CortexId}=State,
+	#agent{scape=Scape,genotype=Geno,cortex_id=CortexId}=State,
 	#{cycle:=Cycle,iterations:=Iterations,learnRate:=LearnRate,neighboorSize:=NeighboorSize,fitness:=Fitness}=AlgoParameters,
 	case Cycle==0 of
 		true->
@@ -74,7 +76,7 @@ k_means(State,AlgoParameters)->
 get_random_centroids(State,K)->
 	#agent{genotype=Geno}=State,
 	#genotype{neurons=Neurons}=Geno,
-	Weights=[Weight||#neuron_som{weight=Weight}<-Neurons],
+	Weights=[Weight||#neuron_som_genotype{weight=Weight}<-Neurons],
 	get_random_centroids(Weights,K,[]).
 get_random_centroids(_,K,Centroids)when K==length(Centroids)->Centroids;
 get_random_centroids(Weights,K,Centroids)->
@@ -82,7 +84,7 @@ get_random_centroids(Weights,K,Centroids)->
 	get_random_centroids(Weights--[Centroid],K,Centroids++[Centroid]).
 
 assign_to_centroids(State,Centroids)->
-	#agent{cortexId=CortexId}=State,
+	#agent{cortex_id=CortexId}=State,
 	phenotype:cluster_setting(CortexId,Centroids),
 	ClusteredGeno=phenotype:pheno_to_geno(CortexId),
 	ClusteredState=State#agent{genotype=ClusteredGeno},
@@ -92,15 +94,15 @@ assign_to_centroids(State,Centroids)->
 get_centroids(State,K)->
 	#agent{genotype=Geno}=State,
 	#genotype{sensors=[Sensor],neurons=Neurons}=Geno,
-	Clusters=[[Neuron||Neuron<-Neurons,Neuron#neuron_som.cluster==C]||C<-lists:seq(1,K)],
+	Clusters=[[Neuron||Neuron<-Neurons,Neuron#neuron_som_phenotype.cluster==C]||C<-lists:seq(1,K)],
 	[weights_avg(Cluster,Sensor)||Cluster<-Clusters].
 
 weights_avg(Cluster,Sensor)->
-	CentroidLen=Sensor#sensor.vl,
+	CentroidLen=Sensor#sensor_genotype.signal_input_length,
 	weights_avg(Cluster,length(Cluster),lists:duplicate(CentroidLen,0)).
 weights_avg([],N,Acc)->[El/N||El<-Acc];
 weights_avg([HNeuron|T],N,Acc)->
-	#neuron_som{weight=Weight}=HNeuron,
+	#neuron_som_genotype{weight=Weight}=HNeuron,
 	weights_avg(T,N,sum(Weight,Acc)).
 
 sum(L1,L2)->[X+Y||{X,Y}<-lists:zip(L1,L2)].
@@ -113,7 +115,7 @@ fit_eshc(State,AlgoParameters)->
 			State#agent{genotype=BestGeno,fitness=BestFit};
 		false->
 			FittedState=fit_shc(State,AlgoParameters),
-			#agent{scape=Scape,genotype=FittedGeno,fitness=Fitness,cortexId=CortexId}=FittedState,
+			#agent{scape=Scape,genotype=FittedGeno,fitness=Fitness,cortex_id=CortexId}=FittedState,
 			case Fitness > BestFit of
 				true->
 					NewParams=maps:merge(AlgoParameters,#{bestGeno=>FittedGeno,bestFit=>Fitness,cycleEshc=>CycleEshc-1}),
@@ -137,7 +139,7 @@ fit_ashc(State,AlgoParameters)->
 			State#agent{genotype=BestGeno,fitness=BestFit};
 		false->
 			FittedState=fit_shc(State,AlgoParameters),
-			#agent{scape=Scape,genotype=FittedGeno,fitness=Fitness,cortexId=CortexId}=FittedState,
+			#agent{scape=Scape,genotype=FittedGeno,fitness=Fitness,cortex_id=CortexId}=FittedState,
 			case Fitness > BestFit of
 				true->
 					NewParams=maps:merge(AlgoParameters,#{bestGeno=>FittedGeno,bestFit=>Fitness,cycleAshc=>CycleAshc-1}),
@@ -156,7 +158,7 @@ fit_ashc(State,AlgoParameters)->
 	end.
 
 fit_shc(State,AlgoParameters)->
-	#agent{scape=Scape,genotype=Geno,cortexId=CortexId,fitness=CurFit}=State,
+	#agent{scape=Scape,genotype=Geno,cortex_id=CortexId,fitness=CurFit}=State,
 	#{stepnessNeuron:=StepN,stepnessWeight:=StepW,cycleShc:=CycleShc,tgFit:=TgFit}=AlgoParameters,
 	#genotype{neurons=Neurons}=Geno,
 	case (CycleShc==0) or (CurFit>=TgFit) of

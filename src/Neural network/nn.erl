@@ -3,6 +3,8 @@
 		stop/1,set_scape/2,set_scape/3,fit_predict/1,fit_predict/2]).
 -define(CONTROLLER,agent).
 -include("utils.hrl").
+-include("genotype.hrl").
+-include("phenotype.hrl").
 
 new(Name,Genotype)when is_record(Genotype,genotype),is_atom(Name)->
 	new(Name,Genotype,0).
