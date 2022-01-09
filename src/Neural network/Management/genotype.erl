@@ -2,12 +2,13 @@
 -export([create_NN/5]).
 -export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_element_by_id/2]).
 -export([get_sensors/1, get_sensors_ids/1, get_actuators/1, get_actuators_ids/1, get_neurons/1, get_neuron_ids/1, get_cortex/1, get_cortex_id/1, get_synapses/3]).
--export([add_sensor/2, add_actuator/2, add_cortex/2, add_neuron/2]).
+-export([update_element/3]).
+-export([add_sensor/2, add_actuator/2, add_cortex/2, add_neuron/2, add_synapses/4]).
+-export([delete_element/2, delete_synapse/3]).
 -include("utils.hrl").
 -include("genotype.hrl").
--include("phenotype.hrl").
 
-%Genotype = {digraph, ets_vertices, ets_edges, ets_neightbours, is_cyclic}
+%Genotype.network = {digraph, ets_vertices, ets_edges, ets_neightbours, is_cyclic}
 
 get_net_type({ffnn,_,_}) -> classic;
 get_net_type({{rnn,_},_,_}) -> classic;
@@ -24,7 +25,7 @@ create_SOM(Constraint,{SignalInputLength,SFitDirectives,SRealDirectives},{AFitDi
 	%2) Add a sensor
 	SensorId = add_sensor(Genotype, #{signal_input_length => SignalInputLength, fit_directives =>SFitDirectives, real_directives => SRealDirectives}),
 	%3) Add an actuator
-	ActuatorId = add_actuator(Genotype, #{number_of_input_signals => NumX * NumY, fit_directives => AFitDirectives, real_directives => ARealDirectives}),
+	ActuatorId = add_actuator(Genotype, #{number_of_clients => NumX * NumY, fit_directives => AFitDirectives, real_directives => ARealDirectives}),
 	%4) Add a cortex
 	CortexId = add_cortex(Genotype, #{fit_directives => CFitDirectives, real_directives => CRealDirectives}),
 	%5) Add the net of neurons, connecting sensor, neurons and actuator
@@ -44,7 +45,7 @@ create_CLASSIC(Constraint, {SignalInputLength, SFitDirectives, SRealDirectives }
 	%2) Add a sensor
 	SensorId = add_sensor(Genotype, #{signal_input_length => SignalInputLength, fit_directives => SFitDirectives, real_directives => SRealDirectives}),
 	%3) Add an actuator
-	ActuatorId = add_actuator(Genotype, #{number_of_input_signals => NumberInputSignals, fit_directives => AFitDirectives, real_directives => ARealDirectives}),
+	ActuatorId = add_actuator(Genotype, #{number_of_clients => NumberInputSignals, fit_directives => AFitDirectives, real_directives => ARealDirectives}),
 	%4) Add a cortex
 	CortexId = add_cortex(Genotype, #{fit_directives => CFitDirectives, real_directives => CRealDirectives}),
 	%5) Add the net of neurons, connecting sensor neurons and actuator together
@@ -308,6 +309,7 @@ add_synapses(Genotype, IdFrom, IdTo, SinapsesLabel) ->
 	digraph:add_edge(Genotype#genotype.network, EdgeId, IdFrom, IdTo, SinapsesGenotype),
 	EdgeId.
 
+%Create elements using a new model
 add_neuron(Genotype, NeuronSomLabel) when Genotype#genotype.network_type == som ->
 	NeuronId = ?GETID,
 	#{signal_len := SignalLength, coordinates := Coordinates, activation_function := ActivationFunction} = NeuronSomLabel,
@@ -339,10 +341,22 @@ add_sensor(Genotype, SensorLabel) ->
 
 add_actuator(Genotype, ActuatorLabel) ->
 	ActuatorId = ?GETID,
-	#{number_of_input_signals := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives} = ActuatorLabel,
-	ActuatorGenotype = #actuator_genotype{id = ActuatorId, number_of_input_signals = NumberInputSignals, fit_directives = FitDirectives, real_directives = RealDirectives},
+	#{number_of_clients := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives} = ActuatorLabel,
+	ActuatorGenotype = #actuator_genotype{id = ActuatorId, number_of_clients = NumberInputSignals, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, ActuatorId, ActuatorGenotype),
 	ActuatorId.
+
+update_element(Genotype, ElementId, ElementLabel) ->
+	throw(to_be_implemented). 
+
+delete_element(Genotype, ElementId) ->
+	digraph:del_vertex(Genotype#genotype.network, ElementId),
+	ok.
+
+delete_synapse(Genotype, IdFrom, IdTo) ->
+	EdgeId = {IdFrom, IdTo},
+	digraph:del_edge(Genotype#genotype.network, EdgeId),
+	ok.
 
 
 

@@ -4,10 +4,10 @@
 -include("phenotype.hrl").
 
 init([Id,Genotype,Fitness])->
-	phenotype:geno_to_pheno(Genotype),
+	AgentState = ?NN_SERVICE_MODULE:genotype_to_phenotype(Genotype),
 	CortexId=genotype:get_cortex_id(Genotype),
 	State=phenotype:link_to_cortex(#agent{id=Id,genotype=Genotype,fitness=Fitness},CortexId),
-	{ok,State}.
+	{ok,AgentState}.
 
 terminate(normal,State)->
 	#agent{cortex_id = CortexId}=State,

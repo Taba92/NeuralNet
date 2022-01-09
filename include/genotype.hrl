@@ -7,7 +7,7 @@
 
 -record(actuator_genotype,{
     id,
-    number_of_input_signals,
+    number_of_clients,
     fit_directives,
     real_directives
     }).

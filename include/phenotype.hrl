@@ -5,55 +5,60 @@
 
 -record(agent,{
             id,
-            scape,
-            cortex_id,
-            genotype,
-            fitness
+            fitness = 0,
+            scape_id,
+            environment_path = ".", %string
+            phenotype,
+    }).
+
+-record(phenotype,{
+    network_type, %classic || som
+    elements_dets % dets with object {Id, IsLocalOrRemote} 
     }).
 
 -record(neuron_classic_phenotype,{
             id,
             layer,
-            af,
+            activation_function,
             bias,
-            faninsWeights,
-            fanouts,
-            roinsWeights,
-            roouts
+            input_signals_data, %[{IdFrom, Weight, PlasticityData}]
+            output_elements_ids, %[IdTo]
+            recurrent_input_signals_data, %[{IdFrom, Weight, PlasticityData}]
+            recurrent_output_elements_ids %[IdTo]
         }).
 
 -record(neuron_som_phenotype,{
             id,
             coordinates,
-            af,
+            activation_function,
             weight,
-            neighbors,
-            fanouts,
+            neighbors_ids,
+            output_elements_ids,
             cluster
         }).
 
 -record(sensor_phenotype,{
             id,
-            vl,
+            signal_input_length,
             fit_directives,
             real_directives,
-            fanouts
+            output_elements_ids
         }).
 
 -record(cortex_phenotype,{
             id,
+            agent_id,
             fit_directives,
             real_directives,
-            sensorsIds,
-            neuronsIds,
-            actuatorsIds
+            input_elements_ids, % typical actuators
+            output_elements_ids, % typical sensors
         }).
 
 -record(actuator_phenotype,{
             id,
-            vl,
+            number_of_clients,
             fit_directives,
             real_directives,
-            fanins,
-            cortex_id
+            input_elements_ids, % typical neurons
+            output_elements_ids, % typical cortex
         }).

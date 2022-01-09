@@ -25,7 +25,7 @@ fit(State,Parameters)when map_get(type,Parameters)==som->
 %%%FIT ALGORITMHS FOR UNSUPERVISED LEARNING
 fit_som(State,AlgoParameters)->%online update
 	#agent{scape=Scape,genotype=Geno,cortex_id=CortexId}=State,
-	#{cycle:=Cycle,iterations:=Iterations,learnRate:=LearnRate,neighboorSize:=NeighboorSize,fitness:=Fitness}=AlgoParameters,
+	#{cycle:=Cycle,iterations:=Iterations, learnRate:=LearnRate, neighboorSize:=NeighboorSize,fitness:=Fitness}=AlgoParameters,
 	case Cycle==0 of
 		true->
 			FittedGeno=phenotype:pheno_to_geno(CortexId),

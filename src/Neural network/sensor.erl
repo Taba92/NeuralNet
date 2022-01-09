@@ -24,7 +24,7 @@ handle_cast(sync_fit,State)->
 	#state{scapeId=Scape,genotype=GenoType}=State,
 	#sensor_phenotype{id=Id,fit_directives=Funs,fanouts=Pids}=GenoType,
 	Signal=gen_server:call(Scape,sense),
-	% Function pipes are function that take a vector of numbers
+	% Function pipes are function that take a vector of numbers as first argument and other optionals args
 	ProcessedSig = nn_service:apply_directives_pipe(Signal, Funs),
 	[gen_server:cast(Pid,{sensor,0,Id,forward_fit,ProcessedSig})||Pid<-Pids],
 	{noreply,State};
