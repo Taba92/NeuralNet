@@ -3,7 +3,7 @@
 -export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_element_by_id/2]).
 -export([get_sensors/1, get_sensors_ids/1, get_actuators/1, get_actuators_ids/1, get_neurons/1, get_neuron_ids/1, get_cortex/1, get_cortex_id/1, get_synapses/3]).
 -export([update_element/3]).
--export([add_sensor/2, add_actuator/2, add_cortex/2, add_neuron/2, add_synapses/4]).
+-export([add_sensor/2, add_actuator/2, add_cortex/2, add_neuron/2, add_synapses/4, add_synapses/2]).
 -export([delete_element/2, delete_synapse/3]).
 -include("utils.hrl").
 -include("genotype.hrl").
@@ -31,9 +31,12 @@ create_SOM(Constraint,{SignalInputLength,SFitDirectives,SRealDirectives},{AFitDi
 	%5) Add the net of neurons, connecting sensor, neurons and actuator
 	create_neuro_net(Constraint, Genotype, {SignalInputLength, {NumX, NumY}}, 0),
 	%6) Connect sensor and actuator to the cortex
-	SinapsyLabel = #{signal_len => 0, modulation_type => none, connection_direction => forward},
-	add_synapses(Genotype, CortexId, SensorId, SinapsyLabel),
-	add_synapses(Genotype, ActuatorId, CortexId, SinapsyLabel),
+	%6.1) Connect cortex to sensor
+	SinapsyCortexToSensorLabel = #{signal_len => 0, tag => {cortex, sensor}, modulation_type => none, connection_direction => forward},
+	add_synapses(Genotype, CortexId, SensorId, SinapsyCortexToSensorLabel),
+	%6.2) Connect actuator to cortex
+	SinapsyActuatorToCortexLabel = #{signal_len => 0, tag => {actuator, cortex}, modulation_type => none, connection_direction => forward},
+	add_synapses(Genotype, ActuatorId, CortexId, SinapsyActuatorToCortexLabel),
 	Genotype.
 
 create_CLASSIC({rnn, ActivationFunction, Plasticity}, SensorSpec, ActuatorSpec, CortexSpec, HiddenLayerDensity) ->
@@ -51,9 +54,12 @@ create_CLASSIC(Constraint, {SignalInputLength, SFitDirectives, SRealDirectives }
 	%5) Add the net of neurons, connecting sensor neurons and actuator together
 	create_neuro_net(Constraint, Genotype, LayerDensity, 1),
 	%6) Connect sensor and actuator to the cortex
-	SinapsyLabel = #{signal_len => 0, modulation_type => none, connection_direction => forward},
-	add_synapses(Genotype, CortexId, SensorId, SinapsyLabel),
-	add_synapses(Genotype, ActuatorId, CortexId, SinapsyLabel),
+	%6.1) Connect cortex to sensor
+	SinapsyCortexToSensorLabel = #{signal_len => 0, modulation_type => none, tag => {cortex, sensor}, connection_direction => forward},
+	add_synapses(Genotype, {CortexId, cortex}, {SensorId, sensor}, SinapsyCortexToSensorLabel),
+	%6.2) Connect actuator to cortex
+	SinapsyActuatorToCortexLabel = #{signal_len => 0, modulation_type => none, tag => {actuator, cortex}, connection_direction => forward},
+	add_synapses(Genotype, ActuatorId, CortexId, SinapsyActuatorToCortexLabel),
 	Genotype.
 
 %SOM
@@ -67,9 +73,12 @@ create_neuro_net({som , ActivationFunction}, Genotype, {SignalInputLength, {NumX
 	% 3) Connect sensor and actuator to the layer.
 	[SensorId] = get_sensors_ids(Genotype),
 	[ActuatorId] = get_actuators_ids(Genotype),
-	SinapsyLabel = #{signal_len => 0, modulation_type => none, connection_direction => forward},
-	[add_synapses(Genotype, SensorId, NeuronId, SinapsyLabel) || NeuronId <- IdsFirstLayer],
-	[add_synapses(Genotype, NeuronId, ActuatorId, SinapsyLabel) || NeuronId <- IdsFirstLayer],
+	%3.1) Connect sensor to the layer
+	SinapsySensorToNeuronLabel = #{signal_len => 0, tag => {sensor, neuron}, modulation_type => none, connection_direction => forward},
+	[add_synapses(Genotype, SensorId, NeuronId, SinapsySensorToNeuronLabel) || NeuronId <- IdsFirstLayer],
+	%3.2) Connect layer to the actuator
+	SinapsyNeuronToActuatorLabel = #{signal_len => 0, tag => {neuron, actuator}, modulation_type => none, connection_direction => forward},
+	[add_synapses(Genotype, NeuronId, ActuatorId, SinapsyNeuronToActuatorLabel) || NeuronId <- IdsFirstLayer],
 	create_neuro_net({som, ActivationFunction}, Genotype, {SignalInputLength, {NumX, NumY}}, 1);
 %Internal and last layers
 create_neuro_net({som, ActivationFunction}, Genotype, {SignalInputLength, {NumX, NumY}}, ColumnNumber)when ColumnNumber < NumY  ->
@@ -82,9 +91,12 @@ create_neuro_net({som, ActivationFunction}, Genotype, {SignalInputLength, {NumX,
 	% 4) Connect sensor and actuator to the layer.
 	[SensorId] = get_sensors_ids(Genotype),
 	[ActuatorId] = get_actuators_ids(Genotype),
-	SinapsyLabel = #{signal_len => 0, modulation_type => none, connection_direction => forward},
-	[add_synapses(Genotype, SensorId, NeuronId, SinapsyLabel) || NeuronId <- IdsCurrentLayer],
-	[add_synapses(Genotype, NeuronId, ActuatorId, SinapsyLabel) || NeuronId <- IdsCurrentLayer],
+	% 4.1) Connect sensor to the layer
+	SinapsySensorToNeuronLabel = #{signal_len => 0, tag => {sensor, neuron}, modulation_type => none, connection_direction => forward},
+	[add_synapses(Genotype, SensorId, NeuronId, SinapsySensorToNeuronLabel) || NeuronId <- IdsCurrentLayer],
+	% 4.2) Connect layer to actuator
+	SinapsyNeuronToActuatorLabel = #{signal_len => 0, tag => {neuron, actuator}, modulation_type => none, connection_direction => forward},
+	[add_synapses(Genotype, NeuronId, ActuatorId, SinapsyNeuronToActuatorLabel) || NeuronId <- IdsCurrentLayer],
 	create_neuro_net({som, ActivationFunction}, Genotype, {SignalInputLength, {NumX , NumY}}, ColumnNumber + 1);
 % Stop
 create_neuro_net({som, _}, _, {_, {_, NumY}}, ColumnNumber) when ColumnNumber == NumY ->
@@ -98,8 +110,8 @@ create_neuro_net({ffnn, ActivationFunction, Plasticity}, Genotype, [H | OtherLay
 	IdsFirstLayer = [add_neuron(Genotype, #{layer => 1, activation_function => ActivationFunction}) || _ <- lists:seq(1, H)],
 	% 2) Connect sensor and the first neuron layer
 	[#sensor_genotype{id = SensorId, signal_input_length = SignalInputLength}] = get_sensors(Genotype),
-	SinapsyLabel = #{signal_len => SignalInputLength, modulation_type => Plasticity, connection_direction => forward},
-	[add_synapses(Genotype, SensorId, NeuronId, SinapsyLabel) || NeuronId <- IdsFirstLayer],
+	SinapsySensorToNeuronLabel = #{signal_len => SignalInputLength, tag => {sensor, neuron}, modulation_type => Plasticity, connection_direction => forward},
+	[add_synapses(Genotype, SensorId, NeuronId, SinapsySensorToNeuronLabel) || NeuronId <- IdsFirstLayer],
 	create_neuro_net({ffnn, ActivationFunction,Plasticity}, Genotype, OtherLayerDensity, 2);
 %Internal and last layers
 create_neuro_net({ffnn, ActivationFunction, Plasticity}, Genotype, [H | OtherLayerDensity], LayerNum) ->
@@ -116,8 +128,8 @@ create_neuro_net({ffnn, ActivationFunction, Plasticity}, Genotype, [H | OtherLay
 				end,
 	IdsLastLayer = get_select_on_elements_filtered(Genotype, Predicate, SelectFun),
 	% 2.2) Add synapses
-	SynapsyLabel = #{signal_len => 1, modulation_type => Plasticity, connection_direction => forward},
-	[add_synapses(Genotype, LastNeuronId, CurrentNeuronId, SynapsyLabel) || LastNeuronId <- IdsLastLayer, CurrentNeuronId <- IdsCurrentLayer],
+	SynapsyNeuronToNeuronLabel = #{signal_len => 1, tag => {neuron, neuron}, modulation_type => Plasticity, connection_direction => forward},
+	[add_synapses(Genotype, LastNeuronId, CurrentNeuronId, SynapsyNeuronToNeuronLabel) || LastNeuronId <- IdsLastLayer, CurrentNeuronId <- IdsCurrentLayer],
 	create_neuro_net({ffnn, ActivationFunction, Plasticity}, Genotype, OtherLayerDensity, LayerNum + 1);
 % Stop
 create_neuro_net({ffnn, _, _}, Genotype, [], LayerLimit) ->
@@ -133,8 +145,8 @@ create_neuro_net({ffnn, _, _}, Genotype, [], LayerLimit) ->
 				end,
 	IdsLastLayer = get_select_on_elements_filtered(Genotype, Predicate, SelectFun),
 	% 3) Connect the last layer to the actuator
-	SinapsyLabel = #{signal_len => 0, modulation_type => none, connection_direction => forward},
-	[add_synapses(Genotype, NeuronId, ActuatorId, SinapsyLabel) || NeuronId <- IdsLastLayer],
+	SinapsyNeuronToActuatorLabel = #{signal_len => 0, tag => {neuron, actuator}, modulation_type => none, connection_direction => forward},
+	[add_synapses(Genotype, NeuronId, ActuatorId, SinapsyNeuronToActuatorLabel) || NeuronId <- IdsLastLayer],
 	ok;
 %%
 
@@ -145,11 +157,11 @@ create_neuro_net({{rnn, RecurrentDepthLevel}, ActivationFunction, Plasticity}, G
 	IdsFirstLayer = [add_neuron(Genotype, #{layer => 1, activation_function => ActivationFunction}) || _ <- lists:seq(1, H)],
 	% 2) Connect sensor and the first neuron layer
 	[#sensor_genotype{id = SensorId, signal_input_length = SignalInputLength}] = get_sensors(Genotype),
-	SinapsyLabel = #{signal_len => SignalInputLength, modulation_type => Plasticity, connection_direction => forward},
-	[add_synapses(Genotype, SensorId, NeuronId, SinapsyLabel) || NeuronId <- IdsFirstLayer],
+	SinapsySensorToNeuronLabel = #{signal_len => SignalInputLength, tag => {sensor, neuron}, modulation_type => Plasticity, connection_direction => forward},
+	[add_synapses(Genotype, SensorId, NeuronId, SinapsySensorToNeuronLabel) || NeuronId <- IdsFirstLayer],
 	% 3) Connect the first layer with itself
 	% 3.1) Foreach id of the first layer, add a synapse between it and itself
-	SynapsyLabelRnn = #{signal_len => 1, modulation_type => Plasticity, connection_direction => recurrent},
+	SynapsyLabelRnn = #{signal_len => 1, tag => {neuron, neuron}, modulation_type => Plasticity, connection_direction => recurrent},
 	[add_synapses(Genotype, CurrentNeuronId, CurrentNeuronId, SynapsyLabelRnn) || CurrentNeuronId <- IdsFirstLayer],
 	create_neuro_net({{rnn, RecurrentDepthLevel}, ActivationFunction, Plasticity}, Genotype, OtherLayerDensity, 2);
 %Internal and last layer
@@ -167,7 +179,7 @@ create_neuro_net({{rnn, RecurrentDepthLevel}, ActivationFunction, Plasticity}, G
 				end,
 	IdsLastLayer = get_select_on_elements_filtered(Genotype, PredicateFfnn, SelectFun),
 	% 2.2) Add synapses
-	SynapsyLabelFfnn = #{signal_len => 1, modulation_type => Plasticity, connection_direction => forward},
+	SynapsyLabelFfnn = #{signal_len => 1, tag => {neuron, neuron}, modulation_type => Plasticity, connection_direction => forward},
 	[add_synapses(Genotype, LastNeuronId, CurrentNeuronId, SynapsyLabelFfnn) || LastNeuronId <- IdsLastLayer, CurrentNeuronId <- IdsCurrentLayer],
 	% 3) Connect the current layer to the RecurrentDepthLevel layers of neurons
 	% 3.1) Get the ids of the recurrents layers of neurons
@@ -181,11 +193,11 @@ create_neuro_net({{rnn, RecurrentDepthLevel}, ActivationFunction, Plasticity}, G
 					end,
 	IdsRecurrentLayer = get_select_on_elements_filtered(Genotype, PredicateRnn, SelectFun),
 	% 3.2) Foreach id of the current layer, add a synapse between it and every recurrent id.
-	SynapsyLabelRnn = #{signal_len => 1, modulation_type => Plasticity, connection_direction => recurrent},
+	SynapsyLabelRnn = #{signal_len => 1, tag => {neuron, neuron}, modulation_type => Plasticity, connection_direction => recurrent},
 	[add_synapses(Genotype, CurrentNeuronId, RecurrentNeuronId, SynapsyLabelRnn) || CurrentNeuronId <- IdsCurrentLayer, RecurrentNeuronId <- IdsRecurrentLayer],
 	% 3.3) Connect the current layer with itself
 	% 3.3) Foreach id of the current layer, add a synapse between it and itself
-	SynapsyLabelRnn = #{signal_len => 1, modulation_type => Plasticity, connection_direction => recurrent},
+	SynapsyLabelRnn = #{signal_len => 1, tag => {neuron, neuron}, modulation_type => Plasticity, connection_direction => recurrent},
 	[add_synapses(Genotype, CurrentNeuronId, CurrentNeuronId, SynapsyLabelRnn) || CurrentNeuronId <- IdsCurrentLayer],
 	create_neuro_net({{rnn, RecurrentDepthLevel}, ActivationFunction, Plasticity}, Genotype, OtherLayerDensity, LayerNum + 1);
 %Stop
@@ -197,7 +209,7 @@ create_neuro_net({{rnn, _}, _, _}, Genotype, [], LayerLimit) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %%Are added edges for each couple of contiguos neuron on the y axe.
 connect_on_y(Genotype, [NeuronId1 | [NeuronId2 | T]]) ->
-	SinapsyLabel = #{signal_len => 0, modulation_type => none, connection_direction => recurrent},
+	SinapsyLabel = #{signal_len => 0, tag => {neuron, neuron}, modulation_type => none, connection_direction => recurrent},
 	%% Add synapse from NeuronId1 to NeuronId2 
 	add_synapses(Genotype, NeuronId1, NeuronId2, SinapsyLabel),
 	%% Add synapse from NeuronId2 to NeuronId1 
@@ -220,8 +232,8 @@ connect_on_x(Genotype, [NeuronId | OtherNeuronsIds]) ->
 	Select = fun(#neuron_som_genotype{id = Neuron2Id}) -> Neuron2Id end,
 	[Neuron2Id] = get_select_on_elements_filtered(Genotype, Predicate, Select),
 	%Connect the neurons
-	add_synapses(Genotype, NeuronId, Neuron2Id, #{signal_len => 0, modulation_type => none, connection_direction => recurrent}),
-	add_synapses(Genotype, Neuron2Id, NeuronId, #{signal_len => 0, modulation_type => none, connection_direction => forward}),
+	add_synapses(Genotype, NeuronId, Neuron2Id, #{signal_len => 0, tag => {neuron, neuron}, modulation_type => none, connection_direction => recurrent}),
+	add_synapses(Genotype, Neuron2Id, NeuronId, #{signal_len => 0, tag => {neuron, neuron}, modulation_type => none, connection_direction => forward}),
 	connect_on_x(Genotype, OtherNeuronsIds);
 connect_on_x(_, []) -> ok.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -299,49 +311,77 @@ get_synapses(Genotype, IdFrom, IdTo) ->
 	EdgeId = {IdFrom, IdTo},
 	{EdgeId, IdFrom, IdTo, EdgeInfo} = digraph:edge(Genotype, EdgeId),
 	EdgeInfo.
-	
-add_synapses(Genotype, IdFrom, IdTo, SinapsesLabel) ->
-	#{signal_len := SignalLength, modulation_type := NeuroModulationType, connection_direction := ConnectionDirection} = SinapsesLabel,
+
+%Create synapse element, generating a new model from the Label	
+add_synapses(Genotype, IdFrom, IdTo, #{signal_len := SignalLength, tag := Tag, modulation_type := NeuroModulationType, connection_direction := ConnectionDirection}) ->
 	EdgeId = {IdFrom, IdTo},
 	Weight = utils:get_random_list(SignalLength),
 	Modulation = plasticity:get_plasticity(Weight, NeuroModulationType),
-	SinapsesGenotype = #synapses{from = IdFrom, to = IdTo, weight = Weight, plasticity_modulation = Modulation, type = ConnectionDirection},
+	SinapsesGenotype = #synapses{id_from = IdFrom, id_to = IdTo, tag = Tag, weight = Weight, plasticity_modulation = Modulation, connection_direction = ConnectionDirection},
+	digraph:add_edge(Genotype#genotype.network, EdgeId, IdFrom, IdTo, SinapsesGenotype),
+	EdgeId.
+%Create synapse element, using existing model given in the Label
+add_synapses(Genotype, #{id_from := IdFrom, id_to := IdTo, tag := Tag, weight := Weight, plasticity_modulation := Modulation, type := ConnectionDirection}) ->
+	EdgeId = {IdFrom, IdTo},
+	SinapsesGenotype = #synapses{id_from = IdFrom, id_to = IdTo, tag = Tag, weight = Weight, plasticity_modulation = Modulation, connection_direction = ConnectionDirection},
 	digraph:add_edge(Genotype#genotype.network, EdgeId, IdFrom, IdTo, SinapsesGenotype),
 	EdgeId.
 
-%Create elements using a new model
-add_neuron(Genotype, NeuronSomLabel) when Genotype#genotype.network_type == som ->
+%Create neuron element, generating a new model from the Label
+add_neuron(Genotype, #{signal_len := SignalLength, coordinates := Coordinates, activation_function := ActivationFunction}) when Genotype#genotype.network_type == som ->
 	NeuronId = ?GETID,
-	#{signal_len := SignalLength, coordinates := Coordinates, activation_function := ActivationFunction} = NeuronSomLabel,
 	Weight = utils:get_random_list(SignalLength),
 	NeuronSomGenotype = #neuron_som_genotype{id = NeuronId, weight = Weight, coordinates = Coordinates, activation_function = ActivationFunction},
 	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronSomGenotype),
 	NeuronId;
-add_neuron(Genotype, NeuronClassicLabel) when Genotype#genotype.network_type == classic ->
+add_neuron(Genotype, #{layer := Layer, activation_function := ActivationFunction}) when Genotype#genotype.network_type == classic ->
 	NeuronId = ?GETID,
-	#{layer := Layer, activation_function := ActivationFunction} = NeuronClassicLabel,
 	Bias = ?RAND,
+	NeuronClassicGenotype = #neuron_classic_genotype{id = NeuronId, bias = Bias, layer = Layer, activation_function = ActivationFunction},
+	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronClassicGenotype),
+	NeuronId;
+%Create neuron element, using existing model given in the Label
+add_neuron(Genotype, #{id := NeuronId, weight := Weight, coordinates := Coordinates, cluster := Cluster, activation_function := ActivationFunction}) when Genotype#genotype.network_type == som ->
+	NeuronSomGenotype = #neuron_som_genotype{id = NeuronId, weight = Weight, cluster = Cluster, coordinates = Coordinates, activation_function = ActivationFunction},
+	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronSomGenotype),
+	NeuronId;
+add_neuron(Genotype, #{id := NeuronId, bias := Bias, layer := Layer, activation_function := ActivationFunction}) when Genotype#genotype.network_type == classic ->
 	NeuronClassicGenotype = #neuron_classic_genotype{id = NeuronId, bias = Bias, layer = Layer, activation_function = ActivationFunction},
 	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronClassicGenotype),
 	NeuronId.
 
-add_cortex(Genotype, CortexLabel) ->
+%Create cortex element, generating a new model from the Label
+add_cortex(Genotype, #{fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	CortexId = ?GETID,
-	#{fit_directives := FitDirectives, real_directives := RealDirectives} = CortexLabel,
+	CortexGenotype = #cortex_genotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
+	digraph:add_vertex(Genotype#genotype.network, CortexId, CortexGenotype),
+	CortexId;
+%Create cortex element, using existing model from the Label
+add_cortex(Genotype, #{id := CortexId, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	CortexGenotype = #cortex_genotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, CortexId, CortexGenotype),
 	CortexId.
 
-add_sensor(Genotype, SensorLabel) ->
+%Create sensor element, generating a new model from the Label
+add_sensor(Genotype, #{signal_input_length := SignalInputLen, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	SensorId = ?GETID,
-	#{signal_input_length := SignalInputLen, fit_directives := FitDirectives, real_directives := RealDirectives} = SensorLabel,
+	SensorGenotype = #sensor_genotype{id = SensorId, signal_input_length = SignalInputLen, fit_directives = FitDirectives, real_directives = RealDirectives},
+	digraph:add_vertex(Genotype#genotype.network, SensorId, SensorGenotype),
+	SensorId;
+%Create sensor element, using an existing model given in the Label
+add_sensor(Genotype, #{id := SensorId, signal_input_length := SignalInputLen, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	SensorGenotype = #sensor_genotype{id = SensorId, signal_input_length = SignalInputLen, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, SensorId, SensorGenotype),
 	SensorId.
 
-add_actuator(Genotype, ActuatorLabel) ->
+%Create actuator element, generating a new model from the Label
+add_actuator(Genotype, #{number_of_clients := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	ActuatorId = ?GETID,
-	#{number_of_clients := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives} = ActuatorLabel,
+	ActuatorGenotype = #actuator_genotype{id = ActuatorId, number_of_clients = NumberInputSignals, fit_directives = FitDirectives, real_directives = RealDirectives},
+	digraph:add_vertex(Genotype#genotype.network, ActuatorId, ActuatorGenotype),
+	ActuatorId;
+%Create actuator element, using an existing model given in the Label
+add_actuator(Genotype, #{id := ActuatorId, number_of_clients := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	ActuatorGenotype = #actuator_genotype{id = ActuatorId, number_of_clients = NumberInputSignals, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, ActuatorId, ActuatorGenotype),
 	ActuatorId.

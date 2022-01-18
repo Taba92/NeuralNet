@@ -21,9 +21,9 @@
             layer,
             activation_function,
             bias,
-            input_signals_data, %[{IdFrom, Weight, PlasticityData}]
+            input_signals_data, %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is sensor or neuron
             output_elements_ids, %[IdTo]
-            recurrent_input_signals_data, %[{IdFrom, Weight, PlasticityData}]
+            recurrent_input_signals_data, %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is neuron
             recurrent_output_elements_ids %[IdTo]
         }).
 
@@ -32,9 +32,10 @@
             coordinates,
             activation_function,
             weight,
-            neighbors_ids,
-            output_elements_ids,
-            cluster
+            cluster,
+            neighbors_data, %[{IdFrom, Type}] where Type = forward || recurrent
+            input_elements_data, %[{IdFrom, NodeType}] NodeType typical is sensor
+            output_elements_ids, % [IdTo] typical actuators ids
         }).
 
 -record(sensor_phenotype,{
@@ -42,7 +43,8 @@
             signal_input_length,
             fit_directives,
             real_directives,
-            output_elements_ids
+            input_elements_data, %[{IdFrom, NodeType}] NodeType typical is cortex
+            output_elements_ids % typical neurons ids
         }).
 
 -record(cortex_phenotype,{
@@ -50,8 +52,8 @@
             agent_id,
             fit_directives,
             real_directives,
-            input_elements_ids, % typical actuators
-            output_elements_ids, % typical sensors
+            input_elements_data, %[{IdFrom, NodeType}] NodeType typical is actuator
+            output_elements_ids, % typical sensors ids
         }).
 
 -record(actuator_phenotype,{
@@ -59,6 +61,6 @@
             number_of_clients,
             fit_directives,
             real_directives,
-            input_elements_ids, % typical neurons
+            input_elements_data, %[{IdFrom, NodeType}] NodeType typical is neuron
             output_elements_ids, % typical cortex
         }).

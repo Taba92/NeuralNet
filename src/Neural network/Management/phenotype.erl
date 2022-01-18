@@ -114,44 +114,61 @@ get_neurons(Phenotype) when Phenotype#phenotype.network_type == classic->
 	get_elements_filtered(Genotype, Predicate).
 
 get_synapses(Phenotype, IdFrom, IdTo) ->
+	%The node receiver hold the informations about synapse
 	throw(to_be_implemented).
+
 
 %Create element using existing model, derived from own genotype in base of model type
 add_cortex(Phenotype, #{id := Id, fit_directives := Fit, real_directives := Real}) ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	dets:insert(Dets, {Id, local}),
 	CortexPhenotype = #cortex_phenotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
 	gen_server:start({local, Id}, ?CORTEX_MODULE, [CortexPhenotype], []),
 	CortexId.
 
 add_sensor(Phenotype, #{id := Id, signal_input_length := InputLength, fit_directives := Fit, real_directives := Real}) ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	dets:insert(Dets, {Id, local}),
 	SensorPhenotype = #sensor_phenotype{id = Id, signal_input_length = InputLength, fit_directives = FitDirectives, real_directives = RealDirectives},
 	gen_server:start({local, Id}, ?SENSOR_MODULE, [SensorPhenotype], []),
 	SensorId.
 
 add_actuator(Phenotype, #{id := Id, number_of_clients := NumClients, fit_directives := Fit, real_directives := Real}) ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	dets:insert(Dets, {Id, local}),
 	ActuatorPhenotype = #actuator_phenotype{id = ActuatorId, number_of_clients = NumClients, fit_directives = FitDirectives, real_directives = RealDirectives},
 	gen_server:start({local, Id}, ?ACTUATOR_MODULE, [ActuatorPhenotype], []),
 	ActuatorId.
+
 add_neuron(Phenotype, #{id := Id, coordinates := Coord, weight := Weight, activation_function := ActivationFunction}) when Phenotype#phenotype.network_type == som ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	dets:insert(Dets, {Id, local}),
 	NeuronSomPhenotype = #neuron_som_phenotype{id = NeuronId, weight = Weight, coordinates = Coordinates, activation_function = ActivationFunction},
 	gen_server:start({local, Id}, ?SOM_PHENOTYPE_MODULE, [NeuronSomPhenotype], []),
 	NeuronId;
 add_neuron(Phenotype, #{id := Id, layer := Layer, bias := Bias, activation_function := ActivationFunction}) when Phenotype#phenotype.network_type == classic ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	dets:insert(Dets, {Id, local}),
 	NeuronClassicPhenotype = #neuron_classic_phenotype{id = NeuronId, bias = Bias, layer = Layer, activation_function = ActivationFunction},
 	gen_server:start({local, Id}, ?CLASSIC_PHENOTYPE_MODULE, [NeuronClassicPhenotype], []),
 	NeuronId.
 
-add_synapses(Phenotype, IdFrom, IdTo, SinapsesLabel) ->
-	#{signal_len := SignalLength, modulation_type := NeuroModulationType, connection_direction := ConnectionDirection} = SinapsesLabel,
-	EdgeId = {IdFrom, IdTo},
+%Inizialize synapses with new parameters
+add_synapses(Phenotype, IdFrom, IdTo, #{signal_len := SignalLength, tag := Tag, modulation_type := NeuroModulationType, connection_direction := ConnectionDirection}) ->
 	Weight = utils:get_random_list(SignalLength),
 	Modulation = plasticity:get_plasticity(Weight, NeuroModulationType),
+	SynapseLabel = #{weight => Weight, tag => Tag, modulation => Modulation, connection_direction => ConnectionDirection},
+	add_synapses(Phenotype, IdFrom, IdTo, SynapseLabel);
+%Initialize synapses with parameters already present
+add_synapses(Phenotype, IdFrom, IdTo, #{weight := Weight, tag := Tag, modulation := Modulation, connection_direction := ConnectionDirection}) ->
 	%Create the phenotype of the sinapses
-	SinapsesPhenotype = {IdFrom, IdTo, Weight, Modulation, ConnectionDirection},
-	%The emanate node will store only the id of the receiver (IdTo) and will send data to it
-	update_element(Phenotype, IdFrom, {add_synapses, you_are_the_sender, SinapsesPhenotype}),
+	SinapsesPhenotype = {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDirection},
+	%The emanate node will store only the id of the receiver (IdTo)
+	update_element(Phenotype, IdFrom, {add_synapses, SinapsesPhenotype}),
 	% The incident node will store the information for process inbound signals from IdFrom
-	update_element(Phenotype, IdTo, {add_synapses, you_are_the_receiver, SinapsesPhenotype}),
-	EdgeId.
+	update_element(Phenotype, IdTo, {add_synapses, SinapsesPhenotype}),
+	EdgeId;
+
 
 %Send directive to the element with id = ElementId
 update_element(_, ElementId, DirectiveLabel) ->
@@ -159,11 +176,13 @@ update_element(_, ElementId, DirectiveLabel) ->
 	ok.
 
 delete_element(Phenotype, ElementId) ->
-	%NB: This method delete ONLY the node. Every inbound and outbound sinapses of this node are maintained!
+	%NB: This method delete ONLY the node. Every inbound and outbound sinapses of this node are maintained on others the connected nodes!
+	#phenotype{elements_dets = Dets} = Phenotype,
+	dets:delete(Dets, ElementId),
 	gen_server:stop(ElementId, normal, infinity),
 	ok.
 
 delete_synapse(Phenotype, IdFrom, IdTo) ->
-	update_element(Phenotype, IdFrom, {delete_synapses, you_are_the_sender, IdTo}),
-	update_element(Phenotype, IdTo, {delete_synapses, you_are_the_receiver, IdFrom}),
+	update_element(Phenotype, IdFrom, {delete_synapses, IdFrom, IdTo}),
+	update_element(Phenotype, IdTo, {delete_synapses, IdFrom, IdTo}),
 	ok.

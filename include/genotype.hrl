@@ -23,6 +23,7 @@
             id,
             coordinates, 
             weight,
+            cluster,
             activation_function
     }).
 
@@ -33,11 +34,12 @@
     }).
 
 -record(synapses,{
-    from,
-    to,
+    id_from, 
+    id_to, 
     weight,
     plasticity_modulation,
-    type % recurrent || forward 
+    tag, %{NodeTypeFrom, NodeTypeTo} where NodeType = cortex || sensor || neuron || actuator
+    connection_direction % recurrent || forward 
     }).
 
 -record(genotype,{
