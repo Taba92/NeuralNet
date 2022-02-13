@@ -1,73 +1,104 @@
 -module(actuator).
 -export([init/1,terminate/2]).
 -export([handle_cast/2,handle_call/3]).
--record(state,{scapeId,received,genotype}).
+-record(state,{scapeId,received,phenotype}).
 -include("utils.hrl").
 -include("phenotype.hrl").
 
-init(GenoType)when is_record(GenoType,actuator_phenotype)->
-	#actuator_phenotype{id=Id}=GenoType,
-	gen_server:start_link({local,Id},?MODULE,[GenoType],[]);
-init([GenoType])->
-	State=#state{received=[],genotype=GenoType},
+init(Phenotype) when is_record(Phenotype, actuator_phenotype)->
+	#actuator_phenotype{id = Id} = Phenotype,
+	gen_server:start_link({local,Id}, ?MODULE, [Phenotype], []);
+init([Phenotype])->
+	State = #state{received = [], phenotype = Phenotype},
 	{ok,State}.
 
-handle_call(dump,_,State)->
-	#state{genotype=GenoType}=State,
-	{reply,GenoType,State};
-handle_call({set_scape,Scape},_,State)->
-	{reply,ok,State#state{scapeId=Scape}}.
+%Public api, to interact with this node
+handle_call(get, _, State)->
+	#state{phenotype = Phenotype} = State,
+	{reply, Phenotype, State};
+handle_call({update, {set_scape, Scape}}, _, State)->
+	{reply, ok, State#state{scapeId = Scape}};
+handle_call({add_synapses, {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDirection}}, _, State) ->
+	#state{phenotype = Phenotype} = State,
+	#actuator_phenotype{id = Id, input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
+	%Check if the node will be the sender or the receiver
+	NewPhenotype = case Id of
+						%Sender
+						IdFrom -> 
+							Phenotype#actuator_phenotype{output_elements_ids = OutputSynapse ++ [IdTo]};
+						% Receiver
+						IdTo ->
+							{NodeTypeFrom, actuator} = Tag,
+							Phenotype#actuator_phenotype{input_elements_data = InputSynapses ++ [{IdFrom, NodeTypeFrom}]}
+					end,
+	{reply, ok, State#state{phenotype = NewPhenotype}};
+handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
+	#state{phenotype = Phenotype} = State,
+	#actuator_phenotype{input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
+	NewPhenotype = case Id of
+						%Sender
+						IdFrom ->
+							Phenotype#actuator_phenotype{output_elements_ids = OutputSynapse -- [IdTo]};
+						%Receiver
+						IdTo ->
+							%Get the synapse of sender node
+							Synapse = lists:keyfind(IdFrom, 1, InputSynapses),
+							Phenotype#actuator_phenotype{input_elements_data = InputSynapses -- [Synapse]};
+	{reply, ok, State#state{phenotype = NewPhenotype}};
+%%%
+terminate(normal, _) -> ok.
 
-
-terminate(normal,_)->ok.
-
-handle_cast({neuron,Term,NId,forward_fit,Signal},State)->
-	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator_phenotype{id=Id,vl=Vl,fit_directives=Funs,fanins=Ins,cortex_id=CortexId}=GenoType,
-	NewRecv=Recv++[{NId,Term,Signal}],
-	NewState=case length(NewRecv)==Vl of
+handle_cast({neuron, Term, NId, forward_fit, Signal}, State) ->
+	#state{scapeId = Scape, received = Recv, phenotype = Phenotype}=State,
+	#actuator_phenotype{id = Id, fit_directives = Funs, input_elements_data = InputSynapse, output_elements_ids = OutputSynapse} = Phenotype,
+	NewRecv = Recv ++ [{NId, Term, Signal}],
+	NewState = case length(NewRecv) == length(InputSynapse) of
 				true->
-					OrderedSignal = nn_service:order_by_keylist(Ins, NewRecv),
-					% Function pipes are function that take a vector of numbers
+					OrderedSignal = nn_service:order_by_keylist(InputSynapse, NewRecv),
+					%1) Function pipes are function that take a vector of numbers
 					ProcessedSignal = nn_service:apply_directives_pipe(OrderedSignal, Funs),
 					%io:fwrite("SIGNAL: ~p~n",[utils:get_BMU(ProcessedSignal)]),
-					{Flag,Msg}=gen_server:call(Scape,{action_fit,ProcessedSignal},infinity),
-					gen_server:cast(CortexId,{fit,Id,Flag,Msg}),
-					State#state{received=[]};
+					%2) Interract with the scape for evaluate the output
+					{Flag, Msg} = gen_server:call(Scape, {action_fit, ProcessedSignal}, infinity),
+					%3) Send to receivers the msg
+					[gen_server:cast(OutputId, {fit, Id, Flag, Msg}) || OutputId <- OutputSynapse],
+					State#state{received = []};
 				false->
-					State#state{received=NewRecv}
+					State#state{received = NewRecv}
 			end,
-	{noreply,NewState};
-handle_cast({neuron,Term,NId,forward_fit_predict,Signal},State)->
-	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator_phenotype{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortex_id=CortexId}=GenoType,
-	NewRecv=Recv++[{NId,Term,Signal}],
-	NewState=case length(NewRecv)==Vl of
+	{noreply, NewState};
+handle_cast({neuron, Term, NId, forward_fit_predict, Signal}, State) ->
+	#state{scapeId = Scape, received=Recv, phenotype = Phenotype} = State,
+	#actuator_phenotype{id = Id, real_directives = Funs, input_elements_data = InputSynapse, output_elements_ids = OutputSynapse} = Phenotype,
+	NewRecv = Recv ++ [{NId, Term, Signal}],
+	NewState = case length(NewRecv) == length(InputSynapse) of
 				true->
-					OrderedSignal = nn_service:order_by_keylist(Ins, NewRecv),
-					% Function pipes are function that take a vector of numbers
+					OrderedSignal = nn_service:order_by_keylist(InputSynapse, NewRecv),
+					%1) Function pipes are function that take a vector of numbers
 					ProcessedSignal = nn_service:apply_directives_pipe(OrderedSignal, Funs),
-					{Flag,Msg}=gen_server:call(Scape,{action_fit_predict,ProcessedSignal},infinity),
-					gen_server:cast(CortexId,{fit_predict,Id,Flag,Msg}),
-					State#state{received=[]};
+					%2) Interract with the scape for evaluate the output
+					{Flag, Msg} = gen_server:call(Scape, {action_fit_predict, ProcessedSignal}, infinity),
+					%3) Send to receivers the msg
+					[gen_server:cast(OutputId, {fit_predict, Id, Flag, Msg}) || OutputId <- OutputSynapse],
+					State#state{received = []};
 				false->
-					State#state{received=NewRecv}
+					State#state{received = NewRecv}
 			end,
-	{noreply,NewState};
-handle_cast({neuron,Term,NId,forward_predict,Signal},State)->
-	#state{scapeId=Scape,received=Recv,genotype=GenoType}=State,
-	#actuator_phenotype{id=Id,vl=Vl,real_directives=Funs,fanins=Ins,cortex_id=CortexId}=GenoType,
-	NewRecv=Recv++[{NId,Term,Signal}],
-	NewState=case length(NewRecv)==Vl of
+	{noreply, NewState};
+handle_cast({neuron, Term, NId, forward_predict, Signal}, State) ->
+	#state{scapeId = Scape, received = Recv, phenotype = Phenotype} = State,
+	#actuator_phenotype{id = Id, real_directives = Funs, input_elements_data = InputSynapse, output_elements_ids = OutputSynapse} = Phenotype,
+	NewRecv = Recv ++ [{NId, Term, Signal}],
+	NewState = case length(NewRecv) == length(InputSynapse) of
 				true->
-					OrderedSignal = nn_service:order_by_keylist(Ins, NewRecv),
+					OrderedSignal = nn_service:order_by_keylist(InputSynapse, NewRecv),
 					% Function pipes are function that take a vector of numbers
 					ProcessedPred = nn_service:apply_directives_pipe(OrderedSignal, Funs),
-					gen_server:call(Scape,{action_predict,ProcessedPred},infinity),
-					gen_server:cast(CortexId,{predict,Id,ProcessedPred}),
-					State#state{received=[]};
+					%2) Send to receivers the msg
+					[gen_server:cast(OutputId, {predict, Id, ProcessedPred}) || OutputId <- OutputSynapse],
+					State#state{received = []};
 				false->
-					State#state{received=NewRecv}
+					State#state{received = NewRecv}
 			end,
-	{noreply,NewState}.
+	{noreply, NewState}.
 

@@ -44,10 +44,5 @@
 
 -record(genotype,{
     network_type, % classic || som
-    network, %digraph
-    %%TODO LUCA: Campi da togliere, solo per compilare senza rotture
-    neurons,
-    sensors,
-    actuators,
-    cortex
+    network %digraph
     }).

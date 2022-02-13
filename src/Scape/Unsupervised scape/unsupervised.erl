@@ -102,11 +102,7 @@ handle_call({action_fit_predict, Cluster}, _, State) ->
 		false ->
 			NewState = State#state{num_line_readed = NumLineReaded + 1},
 			{reply, {another, Msg}, NewState}
-	end;
-
-handle_call({action_predict, _}, _, State) ->
-	{reply, ok, State}.
-
+	end.
 
 scale(Value)->
 	case Value>=20 of

@@ -101,10 +101,7 @@ handle_call({action_fit_predict, Predict}, _, State) ->
 		false ->
 			NewState = State#state{num_line_readed = NumLineReaded + 1},
 			{reply, {another, Msg}, NewState}
-	end;
-
-handle_call({action_predict, _}, _, State) ->
-	{reply, ok, State}.
+	end.
 
 %%Assume that the State is the scape initial state!
 extract_info(State) ->

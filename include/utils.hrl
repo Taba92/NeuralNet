@@ -2,8 +2,8 @@
 -define(ACTIVATION_FUNCTION_MODULE, math_utils).
 -define(DATA_PROCESSING_MODULE, data_processing).
 -define(NN_SERVICE_MODULE, nn_service).
--define(SOM_PHENOTYPE_MODULE, neuron_som).
--define(CLASSIC_PHENOTYPE_MODULE, neuron).
+-define(NEURON_SOM_MODULE, neuron_som).
+-define(NEURON_CLASSIC_MODULE, neuron).
 -define(CORTEX_MODULE, cortex).
 -define(SENSOR_MODULE, sensor).
 -define(ACTUATOR_MODULE, actuator).

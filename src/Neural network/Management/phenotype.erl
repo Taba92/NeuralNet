@@ -1,53 +1,20 @@
 -module(phenotype).
--export([geno_to_pheno/1,pheno_to_geno/1]).
--export([stop_phenotype/1,backup_weights/1,perturb_weights/1,restore_weights/1,cluster_setting/2]).
--export([link_to_cortex/2,link_nn_to_scape/2]).
 -export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_element_by_id/2]).
 -export([get_sensors/1, get_sensors_ids/1, get_actuators/1, get_actuators_ids/1, get_neurons/1, get_neuron_ids/1, get_cortex/1, get_cortex_id/1, get_synapses/3]).
 -export([update_element/3]).
--export([add_neuron/2, add_actuator/2, add_sensor/2, add_cortex/2, add_synapses/4]).
+-export([add_neuron/2, add_actuator/2, add_sensor/2, add_cortex/2, add_element_with_phenotype/2, add_synapses/4]).
 -export([delete_element/2, delete_synapse/3]).
 -include("utils.hrl").
 -include("phenotype.hrl").
 
-stop_phenotype(CortexId)->
-	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex_phenotype{sensorsIds=SensorsIds,neuronsIds=NeuronsIds,actuatorsIds=ActuatorsIds}=CortexGeno,
-	[gen_server:stop(Pid,normal,infinity)||Pid<-[CortexId]++SensorsIds++NeuronsIds++ActuatorsIds],
-	ok.
-
-backup_weights(CortexId)->
-	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex_phenotype{neuronsIds=NeuronsIds}=CortexGeno,
-	[gen_server:call(Pid,backup_weights,infinity)||Pid<-NeuronsIds],
-	ok.
-
-perturb_weights({CortexId,Prob,StepW})->
-	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex_phenotype{neuronsIds=NeuronsIds}=CortexGeno,
-	[gen_server:call(Pid,{perturb_weights,Prob,StepW},infinity)||Pid<-NeuronsIds],
-	ok.
-
-restore_weights(CortexId)->
-	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex_phenotype{neuronsIds=NeuronsIds}=CortexGeno,
-	[gen_server:call(Pid,restore_weights,infinity)||Pid<-NeuronsIds],
-	ok.
-
-cluster_setting(CortexId,Centroids)->
-	CortexGeno=gen_server:call(CortexId,dump,infinity),
-	#cortex_phenotype{neuronsIds=NeuronsIds}=CortexGeno,
-	[gen_server:call(Pid,{cluster_setting,Centroids},infinity)||Pid<-NeuronsIds],
-	ok.
-
 %%%%%%%%%%%%%%%%%%% API %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_elements_filtered(Phenotype, Predicate) ->
 	Dets = Phenotype#phenotype.elements_dets,
-	% In the phenotype table elements data are stored as a tuple {Id, IsRemoteOrLocal}
-	Filter = fun({ElementId, _}, Acc) ->
-				ElementPhenotype = get_element_by_id(ElementId),
+	% In the phenotype table elements data are stored as a tuple {Id, NodeType, IsRemoteOrLocal}
+	Filter = fun({ElementId, _, _}, Acc) ->
+				ElementPhenotype = get_element_by_id(Phenotype, ElementId),
 				case Predicate(ElementPhenotype) of
-					true -> [El | Acc];
+					true -> [ElementPhenotype | Acc];
 					false -> Acc
 				end
 			end,
@@ -55,9 +22,9 @@ get_elements_filtered(Phenotype, Predicate) ->
 
 get_select_on_elements_filtered(Phenotype, Predicate, SelectFunction) ->
 	Dets = Phenotype#phenotype.elements_dets,
-	% In the phenotype table elements data are stored as a tuple {Id, IsRemoteOrLocal}
-	Filter = fun({ElementId, _}, Acc) ->
-				ElementPhenotype = get_element_by_id(ElementId),
+	% In the phenotype table elements data are stored as a tuple {Id, NodeType, IsRemoteOrLocal}
+	Filter = fun({ElementId, _, _}, Acc) ->
+				ElementPhenotype = get_element_by_id(Phenotype, ElementId),
 				case Predicate(ElementPhenotype) of
 					true -> [SelectFunction(ElementPhenotype) | Acc];
 					false -> Acc
@@ -111,46 +78,73 @@ get_neurons(Phenotype) when Phenotype#phenotype.network_type == som->
 	get_elements_filtered(Phenotype, Predicate);
 get_neurons(Phenotype) when Phenotype#phenotype.network_type == classic->
 	Predicate = fun(El) -> is_record(El, neuron_classic_phenotype) end,
-	get_elements_filtered(Genotype, Predicate).
+	get_elements_filtered(Phenotype, Predicate).
 
-get_synapses(Phenotype, IdFrom, IdTo) ->
+get_synapses(_Phenotype, _IdFrom, _IdTo) ->
 	%The node receiver hold the informations about synapse
 	throw(to_be_implemented).
 
+%Given existing phenotype node data, start the node process, adding the id to the phenotype data structure
+add_element_with_phenotype(Phenotype, NodePhenotype) when is_record(NodePhenotype, cortex_phenotype) ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	#cortex_phenotype{id = Id} = NodePhenotype,
+	dets:insert(Dets, {Id, cortex, local}),
+	?CORTEX_MODULE:init(NodePhenotype);
+add_element_with_phenotype(Phenotype, NodePhenotype) when is_record(NodePhenotype, sensor_phenotype) ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	#sensor_phenotype{id = Id} = NodePhenotype,
+	dets:insert(Dets, {Id, sensor, local}),
+	?SENSOR_MODULE:init(NodePhenotype);
+add_element_with_phenotype(Phenotype, NodePhenotype) when is_record(NodePhenotype, actuator_phenotype) ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	#actuator_phenotype{id = Id} = NodePhenotype,
+	dets:insert(Dets, {Id, actuator, local}),
+	?ACTUATOR_MODULE:init(NodePhenotype);
+add_element_with_phenotype(Phenotype, NodePhenotype) when is_record(NodePhenotype, neuron_classic_phenotype) ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	#neuron_classic_phenotype{id = Id} = NodePhenotype,
+	dets:insert(Dets, {Id, neuron_classic, local}),
+	?NEURON_CLASSIC_MODULE:init(NodePhenotype);
+add_element_with_phenotype(Phenotype, NodePhenotype) when is_record(NodePhenotype, neuron_som_phenotype) ->
+	#phenotype{elements_dets = Dets} = Phenotype,
+	#neuron_som_phenotype{id = Id} = NodePhenotype,
+	dets:insert(Dets, {Id, neuron_som, local}),
+	?NEURON_SOM_MODULE:init(NodePhenotype).
+
 
 %Create element using existing model, derived from own genotype in base of model type
-add_cortex(Phenotype, #{id := Id, fit_directives := Fit, real_directives := Real}) ->
+add_cortex(Phenotype, #{id := CortexId, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	#phenotype{elements_dets = Dets} = Phenotype,
-	dets:insert(Dets, {Id, local}),
+	dets:insert(Dets, {CortexId, cortex, local}),
 	CortexPhenotype = #cortex_phenotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
-	gen_server:start({local, Id}, ?CORTEX_MODULE, [CortexPhenotype], []),
+	?CORTEX_MODULE:init(CortexPhenotype),
 	CortexId.
 
-add_sensor(Phenotype, #{id := Id, signal_input_length := InputLength, fit_directives := Fit, real_directives := Real}) ->
+add_sensor(Phenotype, #{id := SensorId, signal_input_length := InputLength, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	#phenotype{elements_dets = Dets} = Phenotype,
-	dets:insert(Dets, {Id, local}),
-	SensorPhenotype = #sensor_phenotype{id = Id, signal_input_length = InputLength, fit_directives = FitDirectives, real_directives = RealDirectives},
-	gen_server:start({local, Id}, ?SENSOR_MODULE, [SensorPhenotype], []),
+	dets:insert(Dets, {SensorId, sensor, local}),
+	SensorPhenotype = #sensor_phenotype{id = SensorId, signal_input_length = InputLength, fit_directives = FitDirectives, real_directives = RealDirectives},
+	?SENSOR_MODULE:init(SensorPhenotype),
 	SensorId.
 
-add_actuator(Phenotype, #{id := Id, number_of_clients := NumClients, fit_directives := Fit, real_directives := Real}) ->
+add_actuator(Phenotype, #{id := ActuatorId, number_of_clients := NumClients, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	#phenotype{elements_dets = Dets} = Phenotype,
-	dets:insert(Dets, {Id, local}),
+	dets:insert(Dets, {ActuatorId, actuator, local}),
 	ActuatorPhenotype = #actuator_phenotype{id = ActuatorId, number_of_clients = NumClients, fit_directives = FitDirectives, real_directives = RealDirectives},
-	gen_server:start({local, Id}, ?ACTUATOR_MODULE, [ActuatorPhenotype], []),
+	?ACTUATOR_MODULE:init(ActuatorPhenotype),
 	ActuatorId.
 
-add_neuron(Phenotype, #{id := Id, coordinates := Coord, weight := Weight, activation_function := ActivationFunction}) when Phenotype#phenotype.network_type == som ->
+add_neuron(Phenotype, #{id := NeuronId, coordinates := Coordinates, weight := Weight, activation_function := ActivationFunction}) when Phenotype#phenotype.network_type == som ->
 	#phenotype{elements_dets = Dets} = Phenotype,
-	dets:insert(Dets, {Id, local}),
+	dets:insert(Dets, {NeuronId, neuron_som, local}),
 	NeuronSomPhenotype = #neuron_som_phenotype{id = NeuronId, weight = Weight, coordinates = Coordinates, activation_function = ActivationFunction},
-	gen_server:start({local, Id}, ?SOM_PHENOTYPE_MODULE, [NeuronSomPhenotype], []),
+	?NEURON_SOM_MODULE:init(NeuronSomPhenotype),
 	NeuronId;
-add_neuron(Phenotype, #{id := Id, layer := Layer, bias := Bias, activation_function := ActivationFunction}) when Phenotype#phenotype.network_type == classic ->
+add_neuron(Phenotype, #{id := NeuronId, layer := Layer, bias := Bias, activation_function := ActivationFunction}) when Phenotype#phenotype.network_type == classic ->
 	#phenotype{elements_dets = Dets} = Phenotype,
-	dets:insert(Dets, {Id, local}),
+	dets:insert(Dets, {NeuronId, neuron_classic, local}),
 	NeuronClassicPhenotype = #neuron_classic_phenotype{id = NeuronId, bias = Bias, layer = Layer, activation_function = ActivationFunction},
-	gen_server:start({local, Id}, ?CLASSIC_PHENOTYPE_MODULE, [NeuronClassicPhenotype], []),
+	?NEURON_CLASSIC_MODULE:init(NeuronClassicPhenotype),
 	NeuronId.
 
 %Inizialize synapses with new parameters
@@ -167,7 +161,7 @@ add_synapses(Phenotype, IdFrom, IdTo, #{weight := Weight, tag := Tag, modulation
 	update_element(Phenotype, IdFrom, {add_synapses, SinapsesPhenotype}),
 	% The incident node will store the information for process inbound signals from IdFrom
 	update_element(Phenotype, IdTo, {add_synapses, SinapsesPhenotype}),
-	EdgeId;
+	{IdFrom, IdTo}.
 
 
 %Send directive to the element with id = ElementId
@@ -183,6 +177,23 @@ delete_element(Phenotype, ElementId) ->
 	ok.
 
 delete_synapse(Phenotype, IdFrom, IdTo) ->
-	update_element(Phenotype, IdFrom, {delete_synapses, IdFrom, IdTo}),
-	update_element(Phenotype, IdTo, {delete_synapses, IdFrom, IdTo}),
+	%Given the phenotype, get the type of the element
+	GetTypeFun = fun (ElementPhenotype) when is_record(ElementPhenotype, cortex_phenotype) ->
+						cortex;
+					  (ElementPhenotype) when is_record(ElementPhenotype, sensor_phenotype) ->
+						sensor;
+					(ElementPhenotype) when is_record(ElementPhenotype, actuator_phenotype) ->
+						actuator;
+					(ElementPhenotype) when is_record(ElementPhenotype, neuron_classic_phenotype) ->
+						neuron_classic;
+					(ElementPhenotype) when is_record(ElementPhenotype, neuron_som_phenotype) ->
+						neuron_som
+				end,
+	%1) Get the tag of the synapse
+	FromPhenotype = get_element_by_id(Phenotype, IdFrom),
+	ToPhenotype = get_element_by_id(Phenotype, IdTo),
+	Tag = {GetTypeFun(FromPhenotype), GetTypeFun(ToPhenotype)},
+	%2) Delete the synapse
+	gen_server:call(IdFrom, {delete_synapses, IdFrom, IdTo, Tag}),
+	gen_server:call(IdTo, {delete_synapses, IdFrom, IdTo, Tag}),
 	ok.

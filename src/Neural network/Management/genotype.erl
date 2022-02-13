@@ -3,7 +3,7 @@
 -export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_element_by_id/2]).
 -export([get_sensors/1, get_sensors_ids/1, get_actuators/1, get_actuators_ids/1, get_neurons/1, get_neuron_ids/1, get_cortex/1, get_cortex_id/1, get_synapses/3]).
 -export([update_element/3]).
--export([add_sensor/2, add_actuator/2, add_cortex/2, add_neuron/2, add_synapses/4, add_synapses/2]).
+-export([add_sensor/2, add_actuator/2, add_cortex/2, add_neuron/2, add_synapses/4, add_synapses/2, add_element_with_genotype/2]).
 -export([delete_element/2, delete_synapse/3]).
 -include("utils.hrl").
 -include("genotype.hrl").
@@ -312,6 +312,29 @@ get_synapses(Genotype, IdFrom, IdTo) ->
 	{EdgeId, IdFrom, IdTo, EdgeInfo} = digraph:edge(Genotype, EdgeId),
 	EdgeInfo.
 
+%Given existing genotype node data, add it to the genotype data structure
+add_element_with_genotype(Genotype, ElementGenotype) when is_record(ElementGenotype, cortex_genotype) ->
+	#cortex_genotype{id = CortexId} = ElementGenotype,
+	digraph:add_vertex(Genotype#genotype.network, CortexId, ElementGenotype);
+add_element_with_genotype(Genotype, ElementGenotype) when is_record(ElementGenotype, sensor_genotype) ->
+	#sensor_genotype{id = SensorId} = ElementGenotype,
+	digraph:add_vertex(Genotype#genotype.network, SensorId, ElementGenotype);
+add_element_with_genotype(Genotype, ElementGenotype) when is_record(ElementGenotype, actuator_genotype) ->
+	#actuator_genotype{id = ActuatorId} = ElementGenotype,
+	digraph:add_vertex(Genotype#genotype.network, ActuatorId, ElementGenotype);
+add_element_with_genotype(Genotype, ElementGenotype) when is_record(ElementGenotype, neuron_classic_genotype) ->
+	#neuron_classic_genotype{id = NeuronId} = ElementGenotype,
+	digraph:add_vertex(Genotype#genotype.network, NeuronId, ElementGenotype);
+add_element_with_genotype(Genotype, ElementGenotype) when is_record(ElementGenotype, neuron_som_genotype) ->
+	#neuron_som_genotype{id = NeuronId} = ElementGenotype,
+	digraph:add_vertex(Genotype#genotype.network, NeuronId, ElementGenotype);
+add_element_with_genotype(Genotype, ElementGenotype) when is_record(ElementGenotype, synapses) ->
+	#synapses{id_from = IdFrom, id_to = IdTo} = ElementGenotype,
+	EdgeId = {IdFrom, IdTo},
+	digraph:add_edge(Genotype#genotype.network, EdgeId, IdFrom, IdTo, ElementGenotype).
+
+
+
 %Create synapse element, generating a new model from the Label	
 add_synapses(Genotype, IdFrom, IdTo, #{signal_len := SignalLength, tag := Tag, modulation_type := NeuroModulationType, connection_direction := ConnectionDirection}) ->
 	EdgeId = {IdFrom, IdTo},
@@ -320,7 +343,7 @@ add_synapses(Genotype, IdFrom, IdTo, #{signal_len := SignalLength, tag := Tag, m
 	SinapsesGenotype = #synapses{id_from = IdFrom, id_to = IdTo, tag = Tag, weight = Weight, plasticity_modulation = Modulation, connection_direction = ConnectionDirection},
 	digraph:add_edge(Genotype#genotype.network, EdgeId, IdFrom, IdTo, SinapsesGenotype),
 	EdgeId.
-%Create synapse element, using existing model given in the Label
+%Create synapse element, using existing synapse model given in the Label
 add_synapses(Genotype, #{id_from := IdFrom, id_to := IdTo, tag := Tag, weight := Weight, plasticity_modulation := Modulation, type := ConnectionDirection}) ->
 	EdgeId = {IdFrom, IdTo},
 	SinapsesGenotype = #synapses{id_from = IdFrom, id_to = IdTo, tag = Tag, weight = Weight, plasticity_modulation = Modulation, connection_direction = ConnectionDirection},
@@ -356,7 +379,7 @@ add_cortex(Genotype, #{fit_directives := FitDirectives, real_directives := RealD
 	CortexGenotype = #cortex_genotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, CortexId, CortexGenotype),
 	CortexId;
-%Create cortex element, using existing model from the Label
+%Create cortex element, using existing  element model from the Label
 add_cortex(Genotype, #{id := CortexId, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	CortexGenotype = #cortex_genotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, CortexId, CortexGenotype),
@@ -386,7 +409,7 @@ add_actuator(Genotype, #{id := ActuatorId, number_of_clients := NumberInputSigna
 	digraph:add_vertex(Genotype#genotype.network, ActuatorId, ActuatorGenotype),
 	ActuatorId.
 
-update_element(Genotype, ElementId, ElementLabel) ->
+update_element(_Genotype, _ElementId, _ElementLabel) ->
 	throw(to_be_implemented). 
 
 delete_element(Genotype, ElementId) ->
