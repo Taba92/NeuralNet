@@ -219,7 +219,7 @@ synapse_phenotype_to_genotype(Genotype, ElementPhenotype) when is_record(Element
 							end,
 	[genotype:add_synapses(Genotype, SynapseGenotypeLabelFun(Synapse)) || Synapse <- Synapses];
 synapse_phenotype_to_genotype(Genotype, ElementPhenotype) when is_record(ElementPhenotype, neuron_classic_phenotype) ->
-	#neuron_classic_phenotype{id = Id, input_signals_data = InputSynapses, recurrent_input_signals_data = RecurrentInputSynapses} = ElementPhenotype,
+	#neuron_classic_phenotype{id = Id, input_elements_data = InputSynapses, recurrent_input_signals_data = RecurrentInputSynapses} = ElementPhenotype,
 	% Are taken synapses from sensors and other neurons to this neuron
 	% Neurons classic synapses have data informations
 	SynapseGenotypeLabelFun = fun({IdFrom, NodeTypeFrom, Weight, PlasticityData, Type}) -> 
@@ -262,13 +262,13 @@ link_to_scape(Agent, ScapeId)->
 
 
 %%Given an input and list of function, create an evaluation pipe on the input
-apply_directives_pipe(Signal,[])->Signal;
-apply_directives_pipe(Signal,[{Mod,Fun,ExtraArgs}|T])when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs)->
-	NewSignal=erlang:apply(Mod,Fun,[Signal|ExtraArgs]),
-	apply_directives_pipe(NewSignal,T);
-apply_directives_pipe(Signal,[{Fun,ExtraArgs}|T])when is_function(Fun),is_list(ExtraArgs)->
-	NewSignal=erlang:apply(Fun,[Signal|ExtraArgs]),
-	apply_directives_pipe(NewSignal,T).
+apply_directives_pipe(Signal, []) -> Signal;
+apply_directives_pipe(Signal, [{Mod, Fun, ExtraArgs} | T]) when is_atom(Mod),is_atom(Fun),is_list(ExtraArgs) ->
+	NewSignal = erlang:apply(Mod, Fun, [Signal | ExtraArgs]),
+	apply_directives_pipe(NewSignal, T);
+apply_directives_pipe(Signal, [{Fun, ExtraArgs} | T]) when is_function(Fun),is_list(ExtraArgs) ->
+	NewSignal = erlang:apply(Fun, [Signal | ExtraArgs]),
+	apply_directives_pipe(NewSignal, T).
 
 %Given a list of keys or tuple key and a tuple list, order the TupleList in the order of the keys of SortList
 order_by_keylist(SortList, TupleListToOrder)->
