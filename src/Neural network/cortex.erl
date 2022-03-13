@@ -8,7 +8,7 @@
 init(Phenotype) when is_record(Phenotype, cortex_phenotype) ->
 	#cortex_phenotype{id = Id} = Phenotype,
 	gen_server:start_link({local, Id}, ?MODULE, [Phenotype], []);
-init([Phenotype]) ->
+init([Phenotype]) when is_record(Phenotype, cortex_phenotype) ->
 	State = #state{received = [], phenotype = Phenotype},
 	{ok, State}.
 
@@ -20,7 +20,7 @@ handle_call(get, _ , State) ->
 	{reply, Phenotype, State};
 handle_call({update, {set_agent_id, AgentId}}, _, State) ->
 	#state{phenotype = Phenotype} = State,
-	NewPhenotype = Phenotype#phenotype{agent_id = AgentId},
+	NewPhenotype = Phenotype#cortex_phenotype{agent_id = AgentId},
 	{reply, ok, State#state{phenotype = NewPhenotype}};
 handle_call({add_synapses, {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDirection}}, _, State) ->
 	#state{phenotype = Phenotype} = State,
@@ -38,7 +38,7 @@ handle_call({add_synapses, {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDir
 	{reply, ok, State#state{phenotype = NewPhenotype}};
 handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
 	#state{phenotype = Phenotype} = State,
-	#cortex_phenotype{input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
+	#cortex_phenotype{id = Id, input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
 	NewPhenotype = case Id of
 						%Sender
 						IdFrom ->
@@ -47,14 +47,15 @@ handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
 						IdTo ->
 							%Get the synapse of sender node
 							Synapse = lists:keyfind(IdFrom, 1, InputSynapses),
-							Phenotype#cortex_phenotype{input_elements_data = InputSynapses -- [Synapse]};
-	{reply, ok, State#state{phenotype = NewPhenotype}};
+							Phenotype#cortex_phenotype{input_elements_data = InputSynapses -- [Synapse]}
+					end,
+	{reply, ok, State#state{phenotype = NewPhenotype}}.
 %%%
 
 %% Internal network api, used during evaluation cycles
 handle_cast(fit_cycle, State) ->
 	#state{phenotype = Phenotype} = State,
-	#cortex_phenotype{output_elements_ids = SensorIds} = Phenotype,
+	#cortex_phenotype{output_elements_ids = SensorsIds} = Phenotype,
 	[gen_server:cast(Sensor, sync_fit) || Sensor <- SensorsIds],
 	{noreply, State};
 handle_cast({predict_cycle, Signal}, State) ->
@@ -69,7 +70,7 @@ handle_cast(fit_predict_cycle, State) ->
 	{noreply, State};
 handle_cast({fit, Id, Flag, Msg}, State) ->
 	#state{received = Recv, phenotype = Phenotype} =State,
-	#cortex_phenotype{agentId = AgentId, fit_directives = Funs, input_elements_data = ActuatorsData} = Phenotype,
+	#cortex_phenotype{agent_id = AgentId, fit_directives = Funs, input_elements_data = ActuatorsData} = Phenotype,
 	NewRecv = Recv ++ [{Id, null, Msg}],
 	NewState = case length(NewRecv) == length(ActuatorsData) of
 					true ->
@@ -101,7 +102,7 @@ handle_cast({fit_predict, Id, Flag, Msg}, State) ->
 						State#state{received = NewRecv}
 			end,
 	{noreply, NewState};
-handle_cast({predict, Id, Pred}, State)- >
+handle_cast({predict, Id, Pred}, State) ->
 	#state{received = Recv, phenotype = Phenotype} = State,
 	#cortex_phenotype{agent_id = AgentId, real_directives = Funs, output_elements_ids = ActuatorsData} = Phenotype,
 	NewRecv = Recv ++ [{Id, null, Pred}],

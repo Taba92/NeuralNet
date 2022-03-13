@@ -1,4 +1,4 @@
--module(nn_service_suite_SUITE).
+-module(nn_service_SUITE).
 -export([all/0]).
 -export([cortex_genotype_to_phenotype_test/1, sensor_genotype_to_phenotype_test/1, actuator_genotype_to_phenotype_test/1,
         neuron_classic_genotype_to_phenotype_test/1, neuron_som_genotype_to_phenotype_test/1, synapse_genotype_to_phenotype_test/1,

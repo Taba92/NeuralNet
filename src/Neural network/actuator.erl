@@ -12,13 +12,15 @@ init([Phenotype])->
 	State = #state{received = [], phenotype = Phenotype},
 	{ok,State}.
 
+terminate(normal, _) -> ok.
+
 %Public api, to interact with this node
 handle_call(get, _, State)->
 	#state{phenotype = Phenotype} = State,
 	{reply, Phenotype, State};
 handle_call({update, {set_scape, Scape}}, _, State)->
 	{reply, ok, State#state{scapeId = Scape}};
-handle_call({add_synapses, {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDirection}}, _, State) ->
+handle_call({add_synapses, {IdFrom, IdTo, Tag, _Weight, _Modulation, _ConnectionDirection}}, _, State) ->
 	#state{phenotype = Phenotype} = State,
 	#actuator_phenotype{id = Id, input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
 	%Check if the node will be the sender or the receiver
@@ -34,7 +36,7 @@ handle_call({add_synapses, {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDir
 	{reply, ok, State#state{phenotype = NewPhenotype}};
 handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
 	#state{phenotype = Phenotype} = State,
-	#actuator_phenotype{input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
+	#actuator_phenotype{id = Id, input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
 	NewPhenotype = case Id of
 						%Sender
 						IdFrom ->
@@ -43,10 +45,10 @@ handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
 						IdTo ->
 							%Get the synapse of sender node
 							Synapse = lists:keyfind(IdFrom, 1, InputSynapses),
-							Phenotype#actuator_phenotype{input_elements_data = InputSynapses -- [Synapse]};
-	{reply, ok, State#state{phenotype = NewPhenotype}};
+							Phenotype#actuator_phenotype{input_elements_data = InputSynapses -- [Synapse]}
+					end,
+	{reply, ok, State#state{phenotype = NewPhenotype}}.
 %%%
-terminate(normal, _) -> ok.
 
 handle_cast({neuron, Term, NId, forward_fit, Signal}, State) ->
 	#state{scapeId = Scape, received = Recv, phenotype = Phenotype}=State,

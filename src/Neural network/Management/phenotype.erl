@@ -7,6 +7,7 @@
 -include("utils.hrl").
 -include("phenotype.hrl").
 
+
 %%%%%%%%%%%%%%%%%%% API %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_elements_filtered(Phenotype, Predicate) ->
 	Dets = Phenotype#phenotype.elements_dets,

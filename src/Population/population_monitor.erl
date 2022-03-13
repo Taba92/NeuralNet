@@ -1,11 +1,12 @@
 -module(population_monitor).
--export([init/1,handle_call/3,terminate/2]).
+%-export([init/1,handle_call/3,terminate/2]).
 -define(EFF,0.1).
 -define(POP_LIMIT,20).
 -include("utils.hrl").
 -include("phenotype.hrl").
 -include("genotype.hrl").
 -record(selection,{agent,truefit,allotedOffspring,nao}).
+-ifdef(comment).
 
 init([Name])->
 	State=#population{id=Name},
@@ -102,3 +103,4 @@ populate(State,[H|RestPopulation])->
 	nn:new(Id,Genotype),
 	nn:set_scape(Id,ScapeId,sync),
 	populate(State#population{agents=State#population.agents++[Id]},RestPopulation).
+-endif.

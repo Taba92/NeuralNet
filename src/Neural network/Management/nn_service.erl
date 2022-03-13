@@ -71,7 +71,7 @@ cluster_setting(Agent, Centroids) ->
 
 %%%Start mapping section
 %%%
-%Retrive the phenotype from the genotype, starting every node and synapse, erasing the last one.
+%Retrieve the phenotype from the genotype, starting every node and synapse, erasing the last one.
 genotype_to_phenotype(Agent, Genotype) when is_record(Agent, agent),is_record(Genotype, genotype) ->
 	#genotype{network = Network, network_type = NetworkType} = Genotype,
 	#agent{id = AgentId, environment_path = Env} = Agent,
@@ -219,7 +219,7 @@ synapse_phenotype_to_genotype(Genotype, ElementPhenotype) when is_record(Element
 							end,
 	[genotype:add_synapses(Genotype, SynapseGenotypeLabelFun(Synapse)) || Synapse <- Synapses];
 synapse_phenotype_to_genotype(Genotype, ElementPhenotype) when is_record(ElementPhenotype, neuron_classic_phenotype) ->
-	#neuron_classic_phenotype{id = Id, input_elements_data = InputSynapses, recurrent_input_signals_data = RecurrentInputSynapses} = ElementPhenotype,
+	#neuron_classic_phenotype{id = Id, input_elements_data = InputSynapses, recurrent_input_elements_data = RecurrentInputSynapses} = ElementPhenotype,
 	% Are taken synapses from sensors and other neurons to this neuron
 	% Neurons classic synapses have data informations
 	SynapseGenotypeLabelFun = fun({IdFrom, NodeTypeFrom, Weight, PlasticityData, Type}) -> 

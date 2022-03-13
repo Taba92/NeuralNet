@@ -23,7 +23,7 @@
             bias,
             input_elements_data, %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is sensor or neuron
             output_elements_ids, %[IdTo]
-            recurrent_input_signals_data, %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is neuron
+            recurrent_input_elements_data, %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is neuron
             recurrent_output_elements_ids %[IdTo]
         }).
 

@@ -1,5 +1,6 @@
 -module(genotype).
 -export([create_NN/5]).
+-export([new/1]).
 -export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_element_by_id/2]).
 -export([get_sensors/1, get_sensors_ids/1, get_actuators/1, get_actuators_ids/1, get_neurons/1, get_neuron_ids/1, get_cortex/1, get_cortex_id/1, get_synapses/3]).
 -export([update_element/3]).
@@ -56,7 +57,7 @@ create_CLASSIC(Constraint, {SignalInputLength, SFitDirectives, SRealDirectives }
 	%6) Connect sensor and actuator to the cortex
 	%6.1) Connect cortex to sensor
 	SinapsyCortexToSensorLabel = #{signal_len => 0, modulation_type => none, tag => {cortex, sensor}, connection_direction => forward},
-	add_synapses(Genotype, {CortexId, cortex}, {SensorId, sensor}, SinapsyCortexToSensorLabel),
+	add_synapses(Genotype, CortexId, SensorId, SinapsyCortexToSensorLabel),
 	%6.2) Connect actuator to cortex
 	SinapsyActuatorToCortexLabel = #{signal_len => 0, modulation_type => none, tag => {actuator, cortex}, connection_direction => forward},
 	add_synapses(Genotype, ActuatorId, CortexId, SinapsyActuatorToCortexLabel),
@@ -237,6 +238,12 @@ connect_on_x(Genotype, [NeuronId | OtherNeuronsIds]) ->
 	connect_on_x(Genotype, OtherNeuronsIds);
 connect_on_x(_, []) -> ok.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+
+%%API
+new(NetworkType) ->
+	Digraph = digraph:new(),
+	#genotype{network_type = NetworkType, network = Digraph}.
 
 get_elements_filtered(Genotype, Predicate) ->
 	{digraph, Vertices, _, _, _} = Genotype#genotype.network,

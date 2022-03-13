@@ -1,9 +1,10 @@
 -module(trainer).
--export([fit/2]).
+%-export([fit/2]).
 -include("utils.hrl").
 -include("phenotype.hrl").
 -include("genotype.hrl").
 
+-ifdef(comments).
 fit(State,Parameters)when map_get(type,Parameters)==shc->
 	fit_shc(State,Parameters);
 fit(State,Parameters)when map_get(type,Parameters)==ashc->
@@ -183,4 +184,4 @@ fit_shc(State,AlgoParameters)->
 				end,
 			fit_shc(NewState,NewParameters)
 	end.
-
+-endif.

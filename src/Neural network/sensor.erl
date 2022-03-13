@@ -12,12 +12,14 @@ init([Phenotype])->
 	State = #state{phenotype = Phenotype},
 	{ok, State}.
 
+terminate(normal, _) -> ok.
+
 handle_call(get, _, State) ->
 	#state{phenotype = Phenotype} = State,
 	{reply, Phenotype, State};
 handle_call({update, {set_scape, Scape}}, _, State) ->
 	{reply, ok, State#state{scapeId = Scape}};
-handle_call({add_synapses, {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDirection}}, _, State) ->
+handle_call({add_synapses, {IdFrom, IdTo, Tag, _Weight, _Modulation, _ConnectionDirection}}, _, State) ->
 	#state{phenotype = Phenotype} = State,
 	#sensor_phenotype{id = Id, input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
 	%Check if the node will be the sender or the receiver
@@ -33,7 +35,7 @@ handle_call({add_synapses, {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDir
 	{reply, ok, State#state{phenotype = NewPhenotype}};
 handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
 	#state{phenotype = Phenotype} = State,
-	#sensor_phenotype{input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
+	#sensor_phenotype{id = Id, input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
 	NewPhenotype = case Id of
 						%Sender
 						IdFrom ->
@@ -42,11 +44,10 @@ handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
 						IdTo ->
 							%Get the synapse of sender node
 							Synapse = lists:keyfind(IdFrom, 1, InputSynapses),
-							Phenotype#sensor_phenotype{input_elements_data = InputSynapses -- [Synapse]};
-	{reply, ok, State#state{phenotype = NewPhenotype}};
+							Phenotype#sensor_phenotype{input_elements_data = InputSynapses -- [Synapse]}
+					end,
+	{reply, ok, State#state{phenotype = NewPhenotype}}.
 %%%
-terminate(normal, _) -> ok.
-
 
 handle_cast(sync_fit, State) ->
 	#state{scapeId = Scape, phenotype = Phenotype} = State,
@@ -64,7 +65,7 @@ handle_cast(sync_fit_predict, State) ->
 	ProcessedSig = nn_service:apply_directives_pipe(Signal, Funs),
 	[gen_server:cast(OutputId, {sensor, 0, Id, forward_fit_predict, ProcessedSig}) || OutputId <- OutputSynapse],
 	{noreply, State};
-handle_cast({sync_predict, Signal}, State)- >
+handle_cast({sync_predict, Signal}, State) ->
 	#state{phenotype = Phenotype} = State,
 	#sensor_phenotype{id = Id, real_directives = Funs, output_elements_ids = OutputSynapse} = Phenotype,
 	%1) Function pipes are function that take a vector of numbers
