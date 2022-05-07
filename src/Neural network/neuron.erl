@@ -63,7 +63,7 @@ handle_call({add_synapses, {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDir
 							Phenotype#neuron_classic_phenotype{recurrent_input_elements_data = RecurrentInputSynapses ++ [{IdFrom, NodeTypeFrom, Weight, Modulation}]}
 					end,
 	{reply, ok, State#state{phenotype = NewPhenotype}};
-handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
+handle_call({delete_synapses, IdFrom, IdTo, Tag}, _, State) ->
 	#state{phenotype = Phenotype} = State,
 	#neuron_classic_phenotype{id = Id, input_elements_data = InputSynapses, output_elements_ids = OutputSynapses, recurrent_input_elements_data = RecurrentInputSynapses, recurrent_output_elements_ids = RecurrentOutputSynapses} = Phenotype,
 	%Check if the node will be the sender or the receiver and if is a forward or recurrent synapse

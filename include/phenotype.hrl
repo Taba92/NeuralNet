@@ -1,6 +1,6 @@
 -record(population,{
             id,
-            agents=[]
+            agents = []
         }).
 
 -record(agent,{
@@ -21,10 +21,10 @@
             layer,
             activation_function,
             bias,
-            input_elements_data, %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is sensor or neuron
-            output_elements_ids, %[IdTo]
-            recurrent_input_elements_data, %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is neuron
-            recurrent_output_elements_ids %[IdTo]
+            input_elements_data = [], %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is sensor or neuron
+            output_elements_ids = [], %[IdTo]
+            recurrent_input_elements_data = [], %[{IdFrom, NodeType, Weight, PlasticityData}] NodeType typical is neuron
+            recurrent_output_elements_ids = [] %[IdTo]
         }).
 
 -record(neuron_som_phenotype,{
@@ -33,34 +33,34 @@
             activation_function,
             weight,
             cluster,
-            neighbors_data, %[{IdFrom, Type}] where Type = forward || recurrent
-            input_elements_data, %[{IdFrom, NodeType}] NodeType typical is sensor
-            output_elements_ids % [IdTo] typical actuators ids
+            neighbors_data = [], %[{IdFrom, Type}] where Type = forward || recurrent
+            input_elements_data = [], %[{IdFrom, NodeType}] NodeType typical is sensor
+            output_elements_ids = [] % [IdTo] typical actuators ids
         }).
 
 -record(sensor_phenotype,{
             id,
             signal_input_length,
-            fit_directives,
-            real_directives,
-            input_elements_data, %[{IdFrom, NodeType}] NodeType typical is cortex
-            output_elements_ids % typical neurons ids
+            fit_directives = [],
+            real_directives = [],
+            input_elements_data = [], %[{IdFrom, NodeType}] NodeType typical is cortex
+            output_elements_ids = [] % typical neurons ids
         }).
 
 -record(cortex_phenotype,{
             id,
             agent_id,
-            fit_directives,
-            real_directives,
-            input_elements_data, %[{IdFrom, NodeType}] NodeType typical is actuator
-            output_elements_ids % typical sensors ids
+            fit_directives = [],
+            real_directives = [],
+            input_elements_data = [], %[{IdFrom, NodeType}] NodeType typical is actuator
+            output_elements_ids = [] % typical sensors ids
         }).
 
 -record(actuator_phenotype,{
             id,
             number_of_clients,
-            fit_directives,
-            real_directives,
-            input_elements_data, %[{IdFrom, NodeType}] NodeType typical is neuron
-            output_elements_ids % typical cortex
+            fit_directives = [],
+            real_directives = [],
+            input_elements_data = [], %[{IdFrom, NodeType}] NodeType typical is neuron
+            output_elements_ids = [] % typical cortex
         }).

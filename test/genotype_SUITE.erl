@@ -52,6 +52,7 @@ add_cortex_with_genotype_test(_) ->
 	genotype:add_element_with_genotype(Genotype, ElementGenotype),
 	%Check if cortex is added
 	?assert(digraph:vertex(Genotype#genotype.network, 1) /= false).
+
 add_sensor_with_genotype_test(_) ->
 	Genotype = genotype:new(classic),
 	ElementGenotype = #sensor_genotype{id = 1},
@@ -91,8 +92,8 @@ add_synapse_with_genotype_test(_) ->
 add_synapses_from_label_test(_) ->
 	Genotype = get_default_genotype(),
 	genotype:add_synapses(Genotype, 1, 2, #{signal_len => 3, tag => {sensor, neuron}, modulation_type => hebbian, connection_direction => forward}),
+	{{1, 2}, 1, 2, Edge} = digraph:edge(Genotype#genotype.network, {1, 2}),
 	%Check if edge is added
-	Edge = digraph:edge(Genotype#genotype.network, {1,2}),
 	?assert(Edge /= false),
 	%Check if the weight is of length 3
 	?assert(length(Edge#synapses.weight) == 3),
@@ -103,9 +104,9 @@ add_synapses_from_label_test(_) ->
 
 add_synapses_from_model_test(_) ->
 	Genotype = get_default_genotype(),
-	genotype:add_synapses(Genotype, 1, 2, #{id_from => 1, id_to => 2, tag => {sensor, neuron}, weight => [1,2,3], plasticity_modulation => none, type => forward}),
+	genotype:add_synapses(Genotype, #{id_from => 1, id_to => 2, tag => {sensor, neuron}, weight => [1,2,3], plasticity_modulation => none, type => forward}),
 	%Check if edge is added
-	Edge = digraph:edge(Genotype#genotype.network, {1,2}),
+	{{1, 2}, 1, 2, Edge} = digraph:edge(Genotype#genotype.network, {1,2}),
 	?assert(Edge /= false).
 
 add_neuron_som_from_label_test(_) ->
@@ -116,7 +117,9 @@ add_neuron_som_from_label_test(_) ->
 	?assert(length(Vertices) == 1),
 	%Check if the neuron som have a signal vector of length 4
 	[Vertex] = Vertices,
-	{1, Label} = Vertex,
+	VertexLabel = digraph:vertex(Genotype#genotype.network, Vertex),
+	?assert(VertexLabel /= false),
+	{Vertex, Label} = VertexLabel,
 	?assert(length(Label#neuron_som_genotype.weight) == 4).
 
 add_neuron_classic_from_label_test(_) ->
@@ -135,8 +138,9 @@ add_neuron_som_from_model_test(_) ->
 add_neuron_classic_from_model_test(_) ->
 	Genotype = genotype:new(classic),
 	genotype:add_neuron(Genotype, #{id => 1, bias => 3, layer => 1, activation_function => rectifier}),
-	%Check if neuron is added
-	?assert(digraph:vertex(Genotype#genotype.network, 1) /= false).
+	Vertices = digraph:vertices(Genotype#genotype.network),
+	%Check if the neuron is added
+	?assert(length(Vertices) == 1).
 
 add_cortex_from_label_test(_) ->
 	Genotype = genotype:new(classic),
@@ -147,8 +151,9 @@ add_cortex_from_label_test(_) ->
 add_cortex_from_model_test(_) ->
 	Genotype = genotype:new(classic),
 	genotype:add_cortex(Genotype, #{id => 1, fit_directives => [], real_directives => []}),
-	%Check if neuron is added
-	?assert(digraph:vertex(Genotype#genotype.network, 1) /= false).
+	Vertices = digraph:vertices(Genotype#genotype.network),
+	%Check if the cortex is added
+	?assert(length(Vertices) == 1).
 
 
 add_sensor_from_label_test(_) ->
@@ -160,24 +165,26 @@ add_sensor_from_label_test(_) ->
 add_sensor_from_model_test(_) ->
 	Genotype = genotype:new(classic),
 	genotype:add_sensor(Genotype, #{id => 1, signal_input_length => 5, fit_directives => [], real_directives => []}),
-	%Check if neuron is added
-	?assert(digraph:vertex(Genotype#genotype.network, 1) /= false).
+	Vertices = digraph:vertices(Genotype#genotype.network),
+	%Check if the sensor is added
+	?assert(length(Vertices) == 1).
 
 add_actuator_from_label_test(_) ->
 	Genotype = genotype:new(classic),
 	genotype:add_actuator(Genotype, #{number_of_clients => 4, fit_directives => [], real_directives => []}),
 	Vertices = digraph:vertices(Genotype#genotype.network),
-	%Check if the neuron is added
+	%Check if the actuator is added
 	?assert(length(Vertices) == 1).
 add_actuator_from_model_test(_) ->
 	Genotype = genotype:new(classic),
 	genotype:add_actuator(Genotype, #{id => 1, number_of_clients => 4, fit_directives => [], real_directives => []}),
-	%Check if neuron is added
-	?assert(digraph:vertex(Genotype#genotype.network, 1) /= false).
+	Vertices = digraph:vertices(Genotype#genotype.network),
+	%Check if the actuator is added
+	?assert(length(Vertices) == 1).
 
 get_elements_filtered_test(_) ->
 	Genotype = get_default_genotype(),
-	Predicate = fun(Element) -> case is_record(Element, neuron_classic_genotype) of true -> true; false -> false end,
+	Predicate = fun(Element) -> case is_record(Element, neuron_classic_genotype) of true -> true; false -> false end end,
 	ElementsFiltered = genotype:get_elements_filtered(Genotype, Predicate),
 	%Check if there is only the neuron 
 	?assert(length(ElementsFiltered) == 1),
@@ -187,7 +194,7 @@ get_elements_filtered_test(_) ->
 
 get_select_on_elements_filtered_test(_) ->
 	Genotype = get_default_genotype(),
-	Predicate = fun(Element) -> case is_record(Element, sensor_genotype) of true -> true; false -> false end,
+	Predicate = fun(Element) -> case is_record(Element, sensor_genotype) of true -> true; false -> false end end,
 	SelectFunction = fun(#sensor_genotype{signal_input_length = X}) -> X end, 
 	ElementsFiltered = genotype:get_select_on_elements_filtered(Genotype, Predicate, SelectFunction),
 	%Check if there is only the sensor 
@@ -214,7 +221,7 @@ get_sensors_test(_) ->
 
 get_sensors_ids_test(_) ->
 	Genotype = get_default_genotype(),
-	SensorsIds = genotype:get_sensors(Genotype),
+	SensorsIds = genotype:get_sensors_ids(Genotype),
 	%Check if there is the sensor
 	?assert(length(SensorsIds) == 1),
 	[SensorId] = SensorsIds,
@@ -241,24 +248,24 @@ get_actuators_ids_test(_) ->
 
 get_neuron_ids_som_test(_) ->
 	Genotype = get_default_genotype(),
-	NeuronsSomIds = genotype:get_neurons_ids(Genotype),
-	%Check if no neurons som are taken, genotype is type classic!
-	?assert(length(NeuronsSomIds) == 0).
+	NeuronsSomIds = genotype:get_neuron_ids(Genotype),
+	%Check if only neuron classic is taken, genotype is type classic!
+	?assert(length(NeuronsSomIds) == 1).
 
 get_neuron_ids_classic_test(_) ->
 	Genotype = get_default_genotype(),
-	NeuronsIds = genotype:get_neurons_ids(Genotype),
+	NeuronsIds = genotype:get_neuron_ids(Genotype),
 	%Check if there is the neuron classic
 	?assert(length(NeuronsIds) == 1),
 	[NeuronId] = NeuronsIds,
 	%Check if the element is the neuron som
-	?assert(NeuronSomId == 2).
+	?assert(NeuronId == 2).
 
 get_neurons_som_test(_) ->
 	Genotype = get_default_genotype(),
-	NeuronsSom = genotype:get_neurons_ids(Genotype),
-	%Check if no neurons som are taken, genotype is type classic!
-	?assert(length(NeuronsSom) == 0).
+	NeuronsSom = genotype:get_neuron_ids(Genotype),
+	%Check if only one neurons are take(only the classic), genotype is type classic!
+	?assert(length(NeuronsSom) == 1).
 get_neurons_classic_test(_) ->
 	Genotype = get_default_genotype(),
 	Neurons = genotype:get_neurons(Genotype),
@@ -282,9 +289,9 @@ get_synapses_test(_) ->
 	Genotype = get_default_genotype(),
 	Synapse = genotype:get_synapses(Genotype, 2, 4),
 	%Check if there is the synapse
-	?assert(is_record(Synapse, synapse_genotype)),
+	?assert(is_record(Synapse, synapses)),
 	%Check if is the synapse we want
-	?assert(Synapse#synapse_genotype.id_from == 2 andalso Synapse#synapse_genotype.id_to == 4).
+	?assert(Synapse#synapses.id_from == 2 andalso Synapse#synapses.id_to == 4).
 
 delete_element_test(_) ->
 	Genotype = get_default_genotype(),
@@ -309,7 +316,7 @@ create_som(_)->
 create_ffnn(_) -> 
 	SensorSpec = {3, [], []},
 	ActuatorSpec ={1, [], []},
-	CortexSpec = {[{fun(List) -> hd(List) end, []}], [{fis_record(Neuron, neuron_classic_genotype)un(List) -> hd(List) end,[]}]},
+	CortexSpec = {[{fun(List) -> hd(List) end, []}], [{fun(List) -> hd(List) end,[]}]},
     Genotype = genotype:create_NN({ffnn, sigmund, hebbian}, SensorSpec, ActuatorSpec, CortexSpec, [3, 4]),
 	print_genotype(Genotype).
 
@@ -351,9 +358,9 @@ get_default_genotype() ->
 	Genotype = genotype:new(classic),
 	genotype:add_element_with_genotype(Genotype, #sensor_genotype{id = 1, signal_input_length = 3}),
 	genotype:add_element_with_genotype(Genotype, #neuron_classic_genotype{id = 2, bias = 4}),
-	genotype:add_element_with_genotype(Genotype, #neuron_classic_genotype{id = 3, weight = 5}),
+	genotype:add_element_with_genotype(Genotype, #neuron_som_genotype{id = 3, weight = 5}),
 	genotype:add_element_with_genotype(Genotype, #actuator_genotype{id = 4, number_of_clients = 1}),
 	genotype:add_element_with_genotype(Genotype, #cortex_genotype{id = 5}),
-	genotype:add_synapses(Genotype, 2, 4),
+	genotype:add_element_with_genotype(Genotype, #synapses{id_from = 2, id_to = 4}),
 	Genotype.
 %%%

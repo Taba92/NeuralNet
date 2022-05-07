@@ -1,5 +1,6 @@
 -module(nn_service).
 -export([genotype_to_phenotype/2, phenotype_to_genotype/2, stop_phenotype/1]).
+-export([element_genotype_to_phenotype/2, element_phenotype_to_genotype/2, synapse_genotype_to_phenotype/2, synapse_phenotype_to_genotype/2]).
 -export([apply_directives_pipe/2, order_by_keylist/2, apply_to_scape/2, perturbate/1]).
 -export([backup_weights/1, perturb_weights/3, restore_weights/1, cluster_setting/2, link_to_scape/2]).
 -include("utils.hrl").
@@ -75,42 +76,40 @@ cluster_setting(Agent, Centroids) ->
 genotype_to_phenotype(Agent, Genotype) when is_record(Agent, agent),is_record(Genotype, genotype) ->
 	#genotype{network = Network, network_type = NetworkType} = Genotype,
 	#agent{id = AgentId, environment_path = Env} = Agent,
-	AgentDirectoryPath = Env ++ atom_to_list(AgentId) ++ "/",
+	AgentDirectoryPath = Env ++ "/" ++ atom_to_list(AgentId) ++ "/",
 	%1) Create the directory environment of the agent if not exist
 	filelib:ensure_dir(AgentDirectoryPath),
-	%2) Create dets file in the directory environment of the agent
-	{ok, PhenotypeDets} = dets:open(AgentId, [{file, AgentDirectoryPath ++ atom_to_list(AgentId)}]),
-	%3) Create the phenotype data structure
-	Phenotype = #phenotype{network_type = NetworkType, elements_dets = PhenotypeDets},
-	%4) Map nodes and synapses to its phenotype
-	%4.1) Prepare structures for mapping
-	{digraph, Vertices, Edges, _} = Network,
-	%4.1.1) Hold vertices and edges in dets temporary files, to avoid duplication of data in the memory
-	{ok, VerticesTemp} = dets:open(vertices_temp, [{file, AgentDirectoryPath ++ "vertices_temp"}]),
+	%2) Create the phenotype
+	Phenotype = phenotype:new(NetworkType, AgentDirectoryPath),
+	%3) Map nodes and synapses to its phenotype
+	%3.1) Prepare structures for mapping
+	{digraph, Vertices, Edges, _, _} = Network,
+	%3.1.1) Hold vertices and edges in dets temporary files, to avoid duplication of data in the memory
+	{ok, VerticesTemp} = dets:open_file(vertices_temp, [{file, AgentDirectoryPath ++ "vertices_temp"}]),
 	ets:to_dets(Vertices, VerticesTemp),
-	{ok, EdgesTemp} = dets:open(edges_temp, [{file, AgentDirectoryPath ++ "edges_temp"}]),
+	{ok, EdgesTemp} = dets:open_file(edges_temp, [{file, AgentDirectoryPath ++ "edges_temp"}]),
 	ets:to_dets(Edges, EdgesTemp),
-	%4.1.2) Now i can remove the genotype from memory
+	%3.1.2) Now i can remove the genotype from memory
 	digraph:delete(Network),
-	%4.2) Start the true mapping
-	%4.2.1) Launch all nodes
+	%3.2) Start the true mapping
+	%3.2.1) Launch all nodes
 	NodesMappingFun = fun({_ElementId, ElementGenotype}) ->
 							element_genotype_to_phenotype(Phenotype, ElementGenotype),
 							continue
 						end,
 	dets:traverse(VerticesTemp, NodesMappingFun),
-	%4.2.1) Connect all nodes, launching all synapses
-	EdgesMappingFun = fun({_SynapseId, SynapseGenotype}) ->
+	%3.2.1) Connect all nodes, creating the synapses
+	EdgesMappingFun = fun({_SynapseId, _, _, SynapseGenotype}) ->
 							synapse_genotype_to_phenotype(Phenotype, SynapseGenotype),
 							continue
 						end,
 	dets:traverse(EdgesTemp, EdgesMappingFun),
-	%5) Delete temporary files
+	%4) Delete temporary files
 	file:delete(AgentDirectoryPath ++ "vertices_temp"),
 	file:delete(AgentDirectoryPath ++ "edges_temp"),
 	%6) Connect the cortex with the agent
 	CortexId = phenotype:get_cortex_id(Phenotype),
-	phenotype:update_element(CortexId, {set_agent_id, AgentId}),
+	phenotype:update_element(Phenotype, CortexId, {set_agent_id, AgentId}),
 	Agent#agent{phenotype = Phenotype}.
 	
 element_genotype_to_phenotype(Phenotype, ElementGenotype) when is_record(ElementGenotype, cortex_genotype) ->
@@ -120,19 +119,19 @@ element_genotype_to_phenotype(Phenotype, ElementGenotype) when is_record(Element
 element_genotype_to_phenotype(Phenotype, ElementGenotype) when is_record(ElementGenotype, sensor_genotype) ->
 	#sensor_genotype{id = Id, signal_input_length = SignalInputLength, fit_directives = FitDirectives, real_directives = RealDirectives} = ElementGenotype,
 	SensorPhenotypeLabel = #{id => Id, signal_input_length => SignalInputLength, fit_directives => FitDirectives, real_directives => RealDirectives},
-	phenotype:add_cortex(Phenotype, SensorPhenotypeLabel);
+	phenotype:add_sensor(Phenotype, SensorPhenotypeLabel);
 element_genotype_to_phenotype(Phenotype, ElementGenotype) when is_record(ElementGenotype, neuron_classic_genotype) ->
 	#neuron_classic_genotype{id = Id, layer = Layer, bias = Bias, activation_function = ActivationFunction} = ElementGenotype,
 	NeuronClassicPhenotypeLabel = #{id => Id, layer => Layer, bias => Bias, activation_function => ActivationFunction},
-	phenotype:add_cortex(Phenotype, NeuronClassicPhenotypeLabel);
+	phenotype:add_neuron(Phenotype, NeuronClassicPhenotypeLabel);
 element_genotype_to_phenotype(Phenotype, ElementGenotype) when is_record(ElementGenotype, neuron_som_genotype) ->
 	#neuron_som_genotype{id = Id, coordinates = Coordinates, weight = Weight, activation_function = ActivationFunction} = ElementGenotype,
 	NeuronSomPhenotypeLabel = #{id => Id, coordinates => Coordinates, weight => Weight, activation_function => ActivationFunction},
-	phenotype:add_cortex(Phenotype, NeuronSomPhenotypeLabel);
+	phenotype:add_neuron(Phenotype, NeuronSomPhenotypeLabel);
 element_genotype_to_phenotype(Phenotype, ElementGenotype) when is_record(ElementGenotype, actuator_genotype) ->
 	#actuator_genotype{id = Id, number_of_clients = NumberOfClients, fit_directives = FitDirectives, real_directives = RealDirectives} = ElementGenotype,
 	ActuatorPhenotypeLabel = #{id => Id, number_of_clients => NumberOfClients, fit_directives => FitDirectives, real_directives => RealDirectives},
-	phenotype:add_cortex(Phenotype, ActuatorPhenotypeLabel).
+	phenotype:add_actuator(Phenotype, ActuatorPhenotypeLabel).
 synapse_genotype_to_phenotype(Phenotype, SynapseGenotype) when is_record(SynapseGenotype, synapses) ->
 	#synapses{id_from = From, id_to = To, tag = Tag, weight = Weight, plasticity_modulation = Modulation, connection_direction = Direction} = SynapseGenotype,
 	SynapsePhenotypeLabel = #{weight => Weight, tag => Tag, modulation => Modulation, connection_direction => Direction},
@@ -142,13 +141,13 @@ synapse_genotype_to_phenotype(Phenotype, SynapseGenotype) when is_record(Synapse
 phenotype_to_genotype(Agent, Phenotype) when is_record(Agent, agent),is_record(Phenotype, phenotype) ->
 	#phenotype{network_type = NetType, elements_dets = ElementsIdsDets} = Phenotype,
 	#agent{id = AgentId, environment_path = Env} = Agent,
-	AgentDirectoryPath = Env ++ atom_to_list(AgentId) ++ "/",
+	AgentDirectoryPath = Env ++ "/" ++ atom_to_list(AgentId) ++ "/",
 	%1) Create the directory environment of the agent if not exist
 	filelib:ensure_dir(AgentDirectoryPath),
 	%2) Initialize the new genotype
-	Genotype = #genotype{network_type = NetType, network = digraph:new()},
+	Genotype = genotype:new(NetType),
 	%3) Create the temporary file for store all elements phenotypes
-	{ok, PhenotypesTemp} = dets:open(phenotypes_temp, [{file, AgentDirectoryPath ++ "phenotypes_temp"}]),
+	{ok, PhenotypesTemp} = dets:open_file(phenotypes_temp, [{file, AgentDirectoryPath ++ "phenotypes_temp"}]),
 	%4) Map nodes and synapses to its genotype
 	%4.1) Collect all elements phenotype, to avoid memory duplication
 	CollectPhenotypesFun = fun({ElementId, _, _}) ->

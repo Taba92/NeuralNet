@@ -316,8 +316,11 @@ get_cortex_id(Genotype) ->
 
 get_synapses(Genotype, IdFrom, IdTo) ->
 	EdgeId = {IdFrom, IdTo},
-	{EdgeId, IdFrom, IdTo, EdgeInfo} = digraph:edge(Genotype, EdgeId),
-	EdgeInfo.
+	%{EdgeId, IdFrom, IdTo, EdgeInfo} = digraph:edge(Genotype#genotype.network, EdgeId),
+	case digraph:edge(Genotype#genotype.network, EdgeId) of
+		{EdgeId, IdFrom, IdTo, EdgeInfo} -> EdgeInfo;
+		false -> false
+	end.
 
 %Given existing genotype node data, add it to the genotype data structure
 add_element_with_genotype(Genotype, ElementGenotype) when is_record(ElementGenotype, cortex_genotype) ->
@@ -357,6 +360,16 @@ add_synapses(Genotype, #{id_from := IdFrom, id_to := IdTo, tag := Tag, weight :=
 	digraph:add_edge(Genotype#genotype.network, EdgeId, IdFrom, IdTo, SinapsesGenotype),
 	EdgeId.
 
+
+%Create neuron element, using existing model given in the Label
+add_neuron(Genotype, #{id := NeuronId, weight := Weight, coordinates := Coordinates, cluster := Cluster, activation_function := ActivationFunction}) when Genotype#genotype.network_type == som ->
+	NeuronSomGenotype = #neuron_som_genotype{id = NeuronId, weight = Weight, cluster = Cluster, coordinates = Coordinates, activation_function = ActivationFunction},
+	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronSomGenotype),
+	NeuronId;
+add_neuron(Genotype, #{id := NeuronId, bias := Bias, layer := Layer, activation_function := ActivationFunction}) when Genotype#genotype.network_type == classic ->
+	NeuronClassicGenotype = #neuron_classic_genotype{id = NeuronId, bias = Bias, layer = Layer, activation_function = ActivationFunction},
+	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronClassicGenotype),
+	NeuronId;
 %Create neuron element, generating a new model from the Label
 add_neuron(Genotype, #{signal_len := SignalLength, coordinates := Coordinates, activation_function := ActivationFunction}) when Genotype#genotype.network_type == som ->
 	NeuronId = ?GETID,
@@ -369,49 +382,40 @@ add_neuron(Genotype, #{layer := Layer, activation_function := ActivationFunction
 	Bias = ?RAND,
 	NeuronClassicGenotype = #neuron_classic_genotype{id = NeuronId, bias = Bias, layer = Layer, activation_function = ActivationFunction},
 	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronClassicGenotype),
-	NeuronId;
-%Create neuron element, using existing model given in the Label
-add_neuron(Genotype, #{id := NeuronId, weight := Weight, coordinates := Coordinates, cluster := Cluster, activation_function := ActivationFunction}) when Genotype#genotype.network_type == som ->
-	NeuronSomGenotype = #neuron_som_genotype{id = NeuronId, weight = Weight, cluster = Cluster, coordinates = Coordinates, activation_function = ActivationFunction},
-	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronSomGenotype),
-	NeuronId;
-add_neuron(Genotype, #{id := NeuronId, bias := Bias, layer := Layer, activation_function := ActivationFunction}) when Genotype#genotype.network_type == classic ->
-	NeuronClassicGenotype = #neuron_classic_genotype{id = NeuronId, bias = Bias, layer = Layer, activation_function = ActivationFunction},
-	digraph:add_vertex(Genotype#genotype.network, NeuronId, NeuronClassicGenotype),
 	NeuronId.
 
+%Create cortex element, using existing  element model from the Label
+add_cortex(Genotype, #{id := CortexId, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
+	CortexGenotype = #cortex_genotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
+	digraph:add_vertex(Genotype#genotype.network, CortexId, CortexGenotype),
+	CortexId;
 %Create cortex element, generating a new model from the Label
 add_cortex(Genotype, #{fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	CortexId = ?GETID,
 	CortexGenotype = #cortex_genotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, CortexId, CortexGenotype),
-	CortexId;
-%Create cortex element, using existing  element model from the Label
-add_cortex(Genotype, #{id := CortexId, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
-	CortexGenotype = #cortex_genotype{id = CortexId, fit_directives = FitDirectives, real_directives = RealDirectives},
-	digraph:add_vertex(Genotype#genotype.network, CortexId, CortexGenotype),
 	CortexId.
 
+%Create sensor element, using an existing model given in the Label
+add_sensor(Genotype, #{id := SensorId, signal_input_length := SignalInputLen, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
+	SensorGenotype = #sensor_genotype{id = SensorId, signal_input_length = SignalInputLen, fit_directives = FitDirectives, real_directives = RealDirectives},
+	digraph:add_vertex(Genotype#genotype.network, SensorId, SensorGenotype),
+	SensorId;
 %Create sensor element, generating a new model from the Label
 add_sensor(Genotype, #{signal_input_length := SignalInputLen, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	SensorId = ?GETID,
 	SensorGenotype = #sensor_genotype{id = SensorId, signal_input_length = SignalInputLen, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, SensorId, SensorGenotype),
-	SensorId;
-%Create sensor element, using an existing model given in the Label
-add_sensor(Genotype, #{id := SensorId, signal_input_length := SignalInputLen, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
-	SensorGenotype = #sensor_genotype{id = SensorId, signal_input_length = SignalInputLen, fit_directives = FitDirectives, real_directives = RealDirectives},
-	digraph:add_vertex(Genotype#genotype.network, SensorId, SensorGenotype),
 	SensorId.
 
-%Create actuator element, generating a new model from the Label
-add_actuator(Genotype, #{number_of_clients := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
-	ActuatorId = ?GETID,
+%Create actuator element, using an existing model given in the Label
+add_actuator(Genotype, #{id := ActuatorId, number_of_clients := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
 	ActuatorGenotype = #actuator_genotype{id = ActuatorId, number_of_clients = NumberInputSignals, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, ActuatorId, ActuatorGenotype),
 	ActuatorId;
-%Create actuator element, using an existing model given in the Label
-add_actuator(Genotype, #{id := ActuatorId, number_of_clients := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
+%Create actuator element, generating a new model from the Label
+add_actuator(Genotype, #{number_of_clients := NumberInputSignals, fit_directives := FitDirectives, real_directives := RealDirectives}) ->
+	ActuatorId = ?GETID,
 	ActuatorGenotype = #actuator_genotype{id = ActuatorId, number_of_clients = NumberInputSignals, fit_directives = FitDirectives, real_directives = RealDirectives},
 	digraph:add_vertex(Genotype#genotype.network, ActuatorId, ActuatorGenotype),
 	ActuatorId.

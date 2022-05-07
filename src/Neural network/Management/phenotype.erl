@@ -1,4 +1,5 @@
 -module(phenotype).
+-export([new/1, new/2, delete/1]).
 -export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_element_by_id/2]).
 -export([get_sensors/1, get_sensors_ids/1, get_actuators/1, get_actuators_ids/1, get_neurons/1, get_neuron_ids/1, get_cortex/1, get_cortex_id/1, get_synapses/3]).
 -export([update_element/3]).
@@ -7,6 +8,24 @@
 -include("utils.hrl").
 -include("phenotype.hrl").
 
+new(NetworkType) ->
+	new(NetworkType, ".").
+new(NetworkType, PhenotypeEnvironment) when is_list(PhenotypeEnvironment) ->
+	{ok, NodesDets} = dets:open_file(nodesdets, [{file, PhenotypeEnvironment ++ "/" ++ "nodes.dets"}]),
+	#phenotype{network_type = NetworkType, elements_dets = NodesDets}.
+
+delete(Phenotype) when is_record(Phenotype, phenotype) ->
+	#phenotype{elements_dets = NodesDets} = Phenotype,
+	NodesDetsPath = dets:info(NodesDets, filename),
+	%1) Stop all nodes process of the phenotype
+	StopFun = fun({ElementId, _, _}) ->
+					delete_element(Phenotype, ElementId),
+					continue
+				end,
+	dets:traverse(NodesDets, StopFun),
+	%2) Delete the dets
+	dets:close(NodesDets),
+	file:delete(NodesDetsPath).
 
 %%%%%%%%%%%%%%%%%%% API %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 get_elements_filtered(Phenotype, Predicate) ->
@@ -74,10 +93,10 @@ get_neuron_ids(Phenotype) when Phenotype#phenotype.network_type == classic->
 	Select = fun(#neuron_classic_phenotype{id = Id}) -> Id end,
 	get_select_on_elements_filtered(Phenotype, Predicate, Select).
 
-get_neurons(Phenotype) when Phenotype#phenotype.network_type == som->
+get_neurons(Phenotype) when Phenotype#phenotype.network_type == som ->
 	Predicate = fun(El) -> is_record(El, neuron_som_phenotype) end,
 	get_elements_filtered(Phenotype, Predicate);
-get_neurons(Phenotype) when Phenotype#phenotype.network_type == classic->
+get_neurons(Phenotype) when Phenotype#phenotype.network_type == classic ->
 	Predicate = fun(El) -> is_record(El, neuron_classic_phenotype) end,
 	get_elements_filtered(Phenotype, Predicate).
 
@@ -159,9 +178,9 @@ add_synapses(Phenotype, IdFrom, IdTo, #{weight := Weight, tag := Tag, modulation
 	%Create the phenotype of the sinapses
 	SinapsesPhenotype = {IdFrom, IdTo, Tag, Weight, Modulation, ConnectionDirection},
 	%The emanate node will store only the id of the receiver (IdTo)
-	update_element(Phenotype, IdFrom, {add_synapses, SinapsesPhenotype}),
+	gen_server:call(IdFrom, {add_synapses, SinapsesPhenotype}),
 	% The incident node will store the information for process inbound signals from IdFrom
-	update_element(Phenotype, IdTo, {add_synapses, SinapsesPhenotype}),
+	gen_server:call(IdTo, {add_synapses, SinapsesPhenotype}),
 	{IdFrom, IdTo}.
 
 

@@ -34,7 +34,7 @@ handle_call({add_synapses, {IdFrom, IdTo, Tag, _Weight, _Modulation, _Connection
 							Phenotype#actuator_phenotype{input_elements_data = InputSynapses ++ [{IdFrom, NodeTypeFrom}]}
 					end,
 	{reply, ok, State#state{phenotype = NewPhenotype}};
-handle_call({delete_synapses, IdFrom, IdTo}, _, State) ->
+handle_call({delete_synapses, IdFrom, IdTo, Tag}, _, State) ->
 	#state{phenotype = Phenotype} = State,
 	#actuator_phenotype{id = Id, input_elements_data = InputSynapses, output_elements_ids = OutputSynapse} = Phenotype,
 	NewPhenotype = case Id of
