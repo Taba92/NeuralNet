@@ -1,9 +1,9 @@
 -module(genotype).
 -export([create_NN/5]).
 -export([new/1]).
--export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_element_by_id/2]).
+-export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_elements_ids/1, get_element_by_id/2, get_synapses_ids/1]).
 -export([get_sensors/1, get_sensors_ids/1, get_actuators/1, get_actuators_ids/1, get_neurons/1, get_neuron_ids/1, get_cortex/1, get_cortex_id/1, get_synapses/3]).
--export([update_element/3]).
+-export([update_element_genotype/3, update_synapse_genotype/4]).
 -export([add_sensor/2, add_actuator/2, add_cortex/2, add_neuron/2, add_synapses/4, add_synapses/2, add_element_with_genotype/2]).
 -export([delete_element/2, delete_synapse/3]).
 -include("utils.hrl").
@@ -266,6 +266,9 @@ get_select_on_elements_filtered(Genotype, Predicate, SelectFunction) ->
 		end,
 	ets:foldl(Filter, [], Vertices).
 
+get_elements_ids(Genotype) ->
+	digraph:vertices(Genotype#genotype.network).
+
 get_element_by_id(Genotype, ElementId) ->
 	{ElementId, Data} = digraph:vertex(Genotype#genotype.network, ElementId),
 	Data.
@@ -313,6 +316,9 @@ get_cortex_id(Genotype) ->
 	Cortex = get_cortex(Genotype),
 	#cortex_genotype{id = Id} = Cortex,
 	Id.
+
+get_synapses_ids(Genotype) ->
+	digraph:edges(Genotype#genotype.network).
 
 get_synapses(Genotype, IdFrom, IdTo) ->
 	EdgeId = {IdFrom, IdTo},
@@ -420,8 +426,11 @@ add_actuator(Genotype, #{number_of_clients := NumberInputSignals, fit_directives
 	digraph:add_vertex(Genotype#genotype.network, ActuatorId, ActuatorGenotype),
 	ActuatorId.
 
-update_element(_Genotype, _ElementId, _ElementLabel) ->
-	throw(to_be_implemented). 
+update_element_genotype(Genotype, ElementId, NewElementGenotype) ->
+	digraph:add_vertex(Genotype#genotype.network, ElementId, NewElementGenotype).
+
+update_synapse_genotype(Genotype, IdFrom, IdTo, NewSynapseGenotype) ->
+	digraph:add_edge(Genotype#genotype.network, {IdFrom, IdTo}, IdFrom, IdTo, NewSynapseGenotype).
 
 delete_element(Genotype, ElementId) ->
 	digraph:del_vertex(Genotype#genotype.network, ElementId),

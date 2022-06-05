@@ -1,58 +1,58 @@
 -module(genotype_mutator).
-%-export([mutate/3,mutate_weights/2,mutate_plasticity/2,mutate_bias/2,mutate_af/2,add_neuro_link/2,add_sensor_link/2,
-%		add_layer_neuron/2,add_neuron/2,clone/1]).
+-export([mutate/3,mutate_weights/2,mutate_plasticity/2,mutate_bias/2,mutate_af/2,add_neuro_link/2,add_sensor_link/2,
+		add_layer_neuron/2,add_neuron/2, clone/1]).
 -include("utils.hrl").
 -include("genotype.hrl").
 -include("phenotype.hrl").
 
--ifdef(comments).
-switch_ids(CortexPhenotype, Mapping) ->
-	%#cortex_phenotype{id = Id, sensorsIds = S, neuronsIds = N, actuatorsIds = A} = CortexPhenotype,
-	%#cortex_phenotype{id=switch(Id,Mapping),sensorsIds=switch(S,Mapping),neuronsIds=switch(N,Mapping),actuatorsIds=switch(A,Mapping)};
-	ok;
-switch_ids(Elements, Mapping)->
-	switch_ids(Elements, Mapping, []).
+clone(Genotype) ->
+	#genotype{network_type = Networktype, network = Network} = Genotype,
+	%1) Initialize a new empty genotype
+	NewGenotype = genotype:new(NetworkType),
+	%2) Clone elements in the new genotype and create mapping between old ids and new ids
+	CloneNodeFun = fun(ElementId, Acc) ->
+						ElementGenotype = genotype:get_element_by_id(Genotype, ElementId),
+						{NewElementId, NewElementGenotype} = clone_element(ElementGenotype),
+						genotype:add_element_with_genotype(NewGenotype, NewElementGenotype),
+						[{ElementId, NewElementId} | Acc]
+				   end,
+	MappingIds = lists:foldl(CloneNodeFun, [], genotype:get_elements_ids(Genotype)),
+	%3) Clone synapses in the new genotype
+	CloneSynapseFun = fun({IdFrom, IdTo}) ->
+						SynapseGenotype = genotype:get_synapses(Genotype, IdFrom, IdTo),
+						{_, NewSynapseGenotype} = clone_synapse(SynapseGenotype, MappingIds),
+						genotype:add_element_with_genotype(NewGenotype, NewSynapseGenotype)
+					  end,
+	lists:map(CloneSynapseFun, genotype:get_synapses_ids(Genotype)),
+	NewGenotype.
 
-switch_ids([], _, Acc) -> Acc;
-switch_ids([Sensor | RestEl], Mapping, Acc) when is_record(Sensor,sensor_phenotype)->
-	%#sensor_phenotype{id=Id,fanouts=Outs}=Sensor,
-	%SwitchedSensor=Sensor#sensor_phenotype{id=switch(Id,Mapping),fanouts=switch(Outs,Mapping)},
-	%switch_ids(RestEl,Mapping,Acc++[SwitchedSensor]);
-	ok;
-switch_ids([Neuron|RestEl],Mapping,Acc)when is_record(Neuron,neuron_classic_phenotype)->
-	%#neuron_classic_phenotype{id=Id,faninsWeights=InsWeights,fanouts=Outs,roinsWeights=RoIns,roouts=RoOuts}=Neuron,
-	%SwitchedNeuron=Neuron#neuron_classic_phenotype{id=switch(Id,Mapping),faninsWeights=switch(InsWeights,Mapping),fanouts=switch(Outs,Mapping),roinsWeights=switch(RoIns,Mapping),roouts=switch(RoOuts,Mapping)},
-	%switch_ids(RestEl,Mapping,Acc++[SwitchedNeuron]);
-	ok;
-switch_ids([Actuator|RestEl],Mapping,Acc)when is_record(Actuator,actuator_phenotype)->
-	%#actuator_phenotype{id=Id,fanins=Ins,cortex_id=CortexId}=Actuator,
-	%SwitchedActuator=Actuator#actuator_phenotype{id=switch(Id,Mapping),fanins=switch(Ins,Mapping),cortex_id=switch(CortexId,Mapping)},
-	%switch_ids(RestEl,Mapping,Acc++[SwitchedActuator]).
-	ok.
+clone_element(ElementGenotype) when is_record(ElementGenotype, cortex_genotype) ->
+	NewId = ?GETID,
+	{NewId, ElementGenotype#cortex_genotype{id = NewId}};
+clone_element(ElementGenotype) when is_record(ElementGenotype, sensor_genotype) ->
+	NewId = ?GETID,
+	{NewId, ElementGenotype#sensor_genotype{id = NewId}};
+clone_element(ElementGenotype) when is_record(ElementGenotype, actuator_genotype) ->
+	NewId = ?GETID,
+	{NewId, ElementGenotype#actuator_genotype{id = NewId}};
+clone_element(ElementGenotype) when is_record(ElementGenotype, neuron_classic_genotype) ->
+	NewId = ?GETID,
+	{NewId, ElementGenotype#neuron_classic_genotype{id = NewId}};
+clone_element(ElementGenotype) when is_record(ElementGenotype, neuron_som_genotype) ->
+	NewId = ?GETID,
+	{NewId, ElementGenotype#neuron_som_genotype{id = NewId}}.
 
-switch(Id,Mapping)when is_atom(Id)->
-	maps:get(Id,Mapping);
-switch(Ids,Mapping)when is_list(Ids)->
-	switch(Ids,Mapping,[]).
+clone_synapse(SynapseGenotype, MappingIds) when is_record(SynapseGenotype, synapses) ->
+	#synapses_genotype{id_from = IdFrom, id_to = IdTo} = SynapseGenotype,
+	%1) Extract new nodes ids of the edge
+	{IdFrom, NewIdFrom} = lists:keyfind(IdFrom, 1, MappingIds),
+	{IdTo, NewIdTo} = lists:keyfind(IdTo, 1, MappingIds),
+	SynapseGenotype#synapses_genotype{id_from = NewIdFrom, id_to = NewIdTo}.
 
-switch([],_,Acc)->Acc;
-switch([{Id,V,Mod}|RestIds],Mapping,Acc)->
-	switch(RestIds,Mapping,Acc++[{maps:get(Id,Mapping),V,Mod}]);
-switch([Id|RestIds],Mapping,Acc)->
-	switch(RestIds,Mapping,Acc++[maps:get(Id,Mapping)]).
-
-clone(Genotype)->
-	%#genotype{sensors=Sensors,neurons=Neurons,actuators=Actuators,cortex=Cortex}=Genotype,
-	%Ids=genotype:get_ids(Genotype),
-	%MappingIds=lists:foldl(fun(Id,Map)->maps:merge(Map,#{Id=>?GETID}) end,#{},Ids),%crea un mapping tra vecchi id e nuovi id!
-	%Genotype#genotype{sensors=switch_ids(Sensors,MappingIds),neurons=switch_ids(Neurons,MappingIds),actuators=switch_ids(Actuators,MappingIds),cortex=switch_ids(Cortex,MappingIds)}.
-	ok.
-
-mutate(Genotype,NMutation,Constraint)->
-	%{MutatorsConstraint,SpecificsConstraint}=parse_constraint(Constraint),
-	%Mutators=[?RANDCHOOSE(MutatorsConstraint)||_<-lists:seq(1,NMutation)],
-	%lists:foldl(fun(Fun,Geno)->?MODULE:Fun(Geno,SpecificsConstraint) end, {Genotype, []}, Mutators).
-	ok.
+mutate(Genotype, NMutation, Constraint)->
+	{MutatorsConstraint, SpecificsConstraint} = parse_constraint(Constraint),
+	Mutators = [?RANDCHOOSE(MutatorsConstraint) || _ <- lists:seq(1, NMutation)],
+	lists:foldl(fun(Fun, Geno) -> ?MODULE:Fun(Geno, SpecificsConstraint) end, {Genotype, []}, Mutators).
 
 
 parse_constraint(none) ->
@@ -75,20 +75,19 @@ parse_constraint(#{mutators := Mutators, af := Afs, plast := Plasts}) when is_li
 	{Mutators, [{af, Afs}, {plast, Plasts}]}.
 
 get_mutators()->
-	[mutate_weights,mutate_bias,mutate_af,add_neuro_link,add_sensor_link,add_layer_neuron,add_neuron,mutate_plasticity].
+	[mutate_weights, mutate_bias, mutate_af, add_neuro_link, add_sensor_link, add_layer_neuron, add_neuron, mutate_plasticity].
 
 mutate_weights({Genotype, Mutations}, _)->
-	%#genotype{neurons=Neurons}=Genotype,
-	%Neuron=?RANDCHOOSE(Neurons),
-	%RemainNeurons=Neurons--[Neuron],
-	%OldInsWeights = Neuron#neuron_classic_phenotype.faninsWeights,
-	%OldRoInsWeights = Neuron#neuron_classic_phenotype.roinsWeights,
-    %NewIns=[{Id,[utils:perturbate(W)||W<-Weight],M}||{Id,Weight,M}<-Neuron#neuron_classic_phenotype.faninsWeights],
-	%NewRoIns=[{Id,[utils:perturbate(W)||W<-Weight],M}||{Id,Weight,M}<-Neuron#neuron_classic_phenotype.roinsWeights],
-	%MutatedNeuron=Neuron#neuron_classic_phenotype{faninsWeights=NewIns,roinsWeights=NewRoIns},
-	%Mutation = #{type => weights, neuron_id => Neuron#neuron_classic_phenotype.id, old_weights => {OldInsWeights, OldRoInsWeights}, new_weights => {NewIns, NewRoIns}},
-	%{Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}, Mutations ++ [Mutation]}.
-	ok.
+	%1) Select a random edge id
+	{IdFrom, IdTo} = ?RANDCHOOSE(genotype:get_synapses_ids(Genotype)),
+	SynapseGenotype = genotype:get_synapses(Genotype, IdFrom, IdTo),
+	%2) Perturb the weight
+	NewWeight = [?NN_SERVICE_MODULE:perturbate(X) || X <- SynapseGenotype#synapses.weight],
+	NewSynapseGenotype = SynapseGenotype#synapses{weight = NewWeight},
+	%3) Update the synapse with the new weight
+	genotype:update_synapse_genotype(Genotype, IdFrom, IdTo, NewSynapseGenotype),
+	Mutation = #{type => weights, synapse_id => {IdFrom, IdTo}, old_weights => SynapseGenotype#synapses.weight, new_weights => NewWeight},
+	{Genotype, Mutations ++ [Mutation]}.
 
 mutate_plasticity({Genotype, Mutations}, Constraint)->
 	%{plast,Plasts}=lists:keyfind(plast,1,Constraint),
@@ -290,4 +289,3 @@ add_layer_neuron({Genotype, Mutations}, Constraint)->%aggiunge un nuovo strato t
 %	lists:member(Id2,Outs);
 %exist_link([#neuron_classic_phenotype{id=Id1,layer=L1},#neuron_classic_phenotype{layer=L2,roouts=RoOuts}])when L1>=L2->
 %	lists:member(Id1,RoOuts).
--endif.

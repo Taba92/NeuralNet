@@ -35,6 +35,7 @@ handle_call({save_nn, FilePath}, _, State) ->
 	dets:traverse(DetsId, PhenotypeStoringFun),
 	dets:close(DetsDump),
 	{reply, ok, State};
+
 handle_call({load_nn, FilePath}, _, State) ->
 	#agent{id = Id, phenotype = Phenotype} = State,
 	%1) Check if the file path exist
@@ -67,21 +68,26 @@ handle_call({load_nn, FilePath}, _, State) ->
 	NewPhenotype = Phenotype#phenotype{network_type = NetType},
 	dets:close(DetsDump),
 	{reply, ok, State#agent{phenotype = NewPhenotype, fitness = Fitness}};
+
 handle_call({set_scape, ScapeId}, _, State) ->
 	?NN_SERVICE_MODULE:link_to_scape(State, ScapeId),
 	{reply, ok, State#agent{scape_id = ScapeId}};
+
 handle_call(fit_predict, _, State)->
 	?NN_SERVICE_MODULE:apply_to_scape(fit_predict, State),
 	{reply, ok, State};
+
 handle_call({predict, Signal}, _, State)->
 	#agent{phenotype = Phenotype} = State,
 	CortexId = phenotype:get_cortex_id(Phenotype),
 	gen_server:cast(CortexId, {predict_cycle, Signal}),
 	receive {prediction, Prediction} -> ok end,
 	{reply, Prediction, State};	
+
 handle_call({fit, Params}, _, State)->
 	%io:fwrite("GENO FITTING: ~p~n",[State#agent.genotype]),
 	NewState = trainer:fit(State,Params),
 	{reply, NewState#agent.fitness, NewState};
+
 handle_call(get, _, State) ->
-	{reply,State,State}.
+	{reply, State, State}.
