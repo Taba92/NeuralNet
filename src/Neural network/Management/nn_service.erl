@@ -3,14 +3,10 @@
 -export([element_genotype_to_phenotype/2, element_phenotype_to_genotype/2, synapse_genotype_to_phenotype/2, synapse_phenotype_to_genotype/2]).
 -export([apply_directives_pipe/2, order_by_keylist/2, apply_to_scape/2, perturbate/1]).
 -export([backup_weights/1, perturb_weights/3, restore_weights/1, cluster_setting/2, link_to_scape/2]).
--export([generate_new_ids/1]).
 -include("utils.hrl").
 -include("genotype.hrl").
 -include("phenotype.hrl").
 
-
-generate_new_ids(Genotype) ->
-	
 
 stop_phenotype(Phenotype) when is_record(Phenotype, phenotype)->
 	#phenotype{elements_dets = DetsId} = Phenotype,

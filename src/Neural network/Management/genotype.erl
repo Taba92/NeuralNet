@@ -1,11 +1,12 @@
 -module(genotype).
 -export([create_NN/5]).
+-export([get_layers/1]).
 -export([new/1]).
 -export([get_select_on_elements_filtered/3, get_elements_filtered/2, get_elements_ids/1, get_element_by_id/2, get_synapses_ids/1]).
 -export([get_sensors/1, get_sensors_ids/1, get_actuators/1, get_actuators_ids/1, get_neurons/1, get_neuron_ids/1, get_cortex/1, get_cortex_id/1, get_synapses/3]).
 -export([update_element_genotype/3, update_synapse_genotype/4]).
 -export([add_sensor/2, add_actuator/2, add_cortex/2, add_neuron/2, add_synapses/4, add_synapses/2, add_element_with_genotype/2]).
--export([delete_element/2, delete_synapse/3]).
+-export([delete_element/2, delete_synapse/3, delete_synapses_from/2]).
 -include("utils.hrl").
 -include("genotype.hrl").
 
@@ -239,8 +240,19 @@ connect_on_x(Genotype, [NeuronId | OtherNeuronsIds]) ->
 connect_on_x(_, []) -> ok.
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% SOM %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
+%%API high level
+get_layers(Genotype) ->
+	Predicate = fun(ElementGenotype) -> is_record(ElementGenotype, neuron_classic_genotype) orelse is_record(ElementGenotype, neuron_som_genotype) end,
+	SelectFun = fun(NeuronGenotype) ->
+					case NeuronGenotype of
+						#neuron_classic_genotype{layer = Layer} -> Layer;
+						#neuron_som_genotype{coordinates = {X, Y}} -> X
+					end
+				end,
+	Layers = lists:usort(get_select_on_elements_filtered(Genotype, Predicate, SelectFun)),
+	Layers.
 
-%%API
+%%API low level
 new(NetworkType) ->
 	Digraph = digraph:new(),
 	#genotype{network_type = NetworkType, network = Digraph}.
@@ -350,7 +362,6 @@ add_element_with_genotype(Genotype, ElementGenotype) when is_record(ElementGenot
 	digraph:add_edge(Genotype#genotype.network, EdgeId, IdFrom, IdTo, ElementGenotype).
 
 
-
 %Create synapse element, generating a new model from the Label	
 add_synapses(Genotype, IdFrom, IdTo, #{signal_len := SignalLength, tag := Tag, modulation_type := NeuroModulationType, connection_direction := ConnectionDirection}) ->
 	EdgeId = {IdFrom, IdTo},
@@ -435,6 +446,11 @@ update_synapse_genotype(Genotype, IdFrom, IdTo, NewSynapseGenotype) ->
 delete_element(Genotype, ElementId) ->
 	digraph:del_vertex(Genotype#genotype.network, ElementId),
 	ok.
+
+%Delete synapse outgoing from the node IdFrom
+delete_synapses_from(Genotype, IdFrom) ->
+	OutgoingSynapses = digraph:out_edges(Genotype#genotype.network, IdFrom),
+	digraph:del_edges(Genotype#genotype.network, OutgoingSynapses).
 
 delete_synapse(Genotype, IdFrom, IdTo) ->
 	EdgeId = {IdFrom, IdTo},

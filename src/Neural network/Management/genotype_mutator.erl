@@ -1,14 +1,17 @@
 -module(genotype_mutator).
 -export([mutate/3,mutate_weights/2,mutate_plasticity/2,mutate_bias/2,mutate_af/2,add_neuro_link/2,add_sensor_link/2,
-		add_layer_neuron/2,add_neuron/2, clone/1]).
+		add_layer_neuron/2, add_neuron/2, clone/1]).
 -include("utils.hrl").
 -include("genotype.hrl").
 -include("phenotype.hrl").
 
+%%SUPPORTED ONLY MUTATIONS OF CLASSIC NEURONS
+%%IN FUTURE WILL BE SUPPORTED ALSO SOM NEURONS
+
 clone(Genotype) ->
 	#genotype{network_type = Networktype, network = Network} = Genotype,
 	%1) Initialize a new empty genotype
-	NewGenotype = genotype:new(NetworkType),
+	NewGenotype = genotype:new(Networktype),
 	%2) Clone elements in the new genotype and create mapping between old ids and new ids
 	CloneNodeFun = fun(ElementId, Acc) ->
 						ElementGenotype = genotype:get_element_by_id(Genotype, ElementId),
@@ -43,11 +46,11 @@ clone_element(ElementGenotype) when is_record(ElementGenotype, neuron_som_genoty
 	{NewId, ElementGenotype#neuron_som_genotype{id = NewId}}.
 
 clone_synapse(SynapseGenotype, MappingIds) when is_record(SynapseGenotype, synapses) ->
-	#synapses_genotype{id_from = IdFrom, id_to = IdTo} = SynapseGenotype,
+	#synapses{id_from = IdFrom, id_to = IdTo} = SynapseGenotype,
 	%1) Extract new nodes ids of the edge
 	{IdFrom, NewIdFrom} = lists:keyfind(IdFrom, 1, MappingIds),
 	{IdTo, NewIdTo} = lists:keyfind(IdTo, 1, MappingIds),
-	SynapseGenotype#synapses_genotype{id_from = NewIdFrom, id_to = NewIdTo}.
+	SynapseGenotype#synapses{id_from = NewIdFrom, id_to = NewIdTo}.
 
 mutate(Genotype, NMutation, Constraint)->
 	{MutatorsConstraint, SpecificsConstraint} = parse_constraint(Constraint),
@@ -74,218 +77,238 @@ parse_constraint(#{mutators := Mutators, af := none, plast := none}) when is_lis
 parse_constraint(#{mutators := Mutators, af := Afs, plast := Plasts}) when is_list(Mutators),is_list(Afs),is_list(Plasts) ->
 	{Mutators, [{af, Afs}, {plast, Plasts}]}.
 
-get_mutators()->
+get_mutators() ->
 	[mutate_weights, mutate_bias, mutate_af, add_neuro_link, add_sensor_link, add_layer_neuron, add_neuron, mutate_plasticity].
 
-mutate_weights({Genotype, Mutations}, _)->
+mutate_weights({Genotype, Mutations}, _) ->
 	%1) Select a random edge id
 	{IdFrom, IdTo} = ?RANDCHOOSE(genotype:get_synapses_ids(Genotype)),
 	SynapseGenotype = genotype:get_synapses(Genotype, IdFrom, IdTo),
 	%2) Perturb the weight
 	NewWeight = [?NN_SERVICE_MODULE:perturbate(X) || X <- SynapseGenotype#synapses.weight],
 	NewSynapseGenotype = SynapseGenotype#synapses{weight = NewWeight},
-	%3) Update the synapse with the new weight
+	%3) Update the synapse
 	genotype:update_synapse_genotype(Genotype, IdFrom, IdTo, NewSynapseGenotype),
 	Mutation = #{type => weights, synapse_id => {IdFrom, IdTo}, old_weights => SynapseGenotype#synapses.weight, new_weights => NewWeight},
 	{Genotype, Mutations ++ [Mutation]}.
 
-mutate_plasticity({Genotype, Mutations}, Constraint)->
-	%{plast,Plasts}=lists:keyfind(plast,1,Constraint),
-	%#genotype{neurons=Neurons}=Genotype,
-	%Neuron=?RANDCHOOSE(Neurons),
-	%RemainNeurons=Neurons--[Neuron],
-	%OldInsWeights = Neuron#neuron_classic_phenotype.faninsWeights,
-	%OldRoInsWeights = Neuron#neuron_classic_phenotype.roinsWeights,
-    %NewIns=[{Id,Weight,plasticity:get_rand_plast(Weight,Plasts)}||{Id,Weight,_}<-Neuron#neuron_classic_phenotype.faninsWeights],
-	%NewRoIns=[{Id,Weight,plasticity:get_rand_plast(Weight,Plasts)}||{Id,Weight,_}<-Neuron#neuron_classic_phenotype.roinsWeights],
-    %MutatedNeuron=Neuron#neuron_classic_phenotype{faninsWeights=NewIns,roinsWeights=NewRoIns},
-	%Mutation = #{type => plasticity, neuron_id => Neuron#neuron_classic_phenotype.id, old_weights => {OldInsWeights, OldRoInsWeights}, new_weights => {NewIns, NewRoIns}},
-	%{Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}, Mutations ++ [Mutation]}.
-	ok.
+mutate_plasticity({Genotype, Mutations}, Constraint) ->
+	{plast, Plasts} = lists:keyfind(plast, 1, Constraint),
+	%1) Select a random edge id
+	{IdFrom, IdTo} = ?RANDCHOOSE(genotype:get_synapses_ids(Genotype)),
+	SynapseGenotype = genotype:get_synapses(Genotype, IdFrom, IdTo),
+	%2) Modify the plasticity of the synapse
+	NewPlasticity = plasticity:get_rand_plast(SynapseGenotype#synapses.weight, Plasts),
+	NewSynapseGenotype = SynapseGenotype#synapses{plasticity_modulation = NewPlasticity},
+	%3) Update the synapse 
+	genotype:update_synapse_genotype(Genotype, IdFrom, IdTo, NewSynapseGenotype),
+	Mutation = #{type => plasticity, synapse_id => {IdFrom, IdTo}, old_plasticity => SynapseGenotype#synapses.plasticity_modulation, new_plasticity => NewPlasticity},
+	{Genotype, Mutations ++ [Mutation]}.
 
-mutate_bias({Genotype, Mutations}, _)->
-	%#genotype{neurons=Neurons}=Genotype,
-	%Neuron=?RANDCHOOSE(Neurons),
-	%RemainNeurons=Neurons--[Neuron],
-	%OldBias = Neuron#neuron_classic_phenotype.bias,
-	%MutatedNeuron=Neuron#neuron_classic_phenotype{bias=utils:perturbate(Neuron#neuron_classic_phenotype.bias)},
-	%NewBias = MutatedNeuron#neuron_classic_phenotype.bias,
-	%utation = #{type => bias, neuron_id => Neuron#neuron_classic_phenotype.id, old_bias => OldBias, new_bias => NewBias},
-	%{Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}, Mutations ++ [Mutation]}.
-	ok.
+mutate_bias({Genotype, Mutations}, _) ->
+	%1) Select random neuron
+	NeuronId = ?RANDCHOOSE(genotype:get_neuron_ids(Genotype)),
+	NeuronGenotype = genotype:get_element_by_id(NeuronId),
+	%2) Perturb the bias
+	NewBias = [?NN_SERVICE_MODULE:perturbate(X) || X <- NeuronGenotype#neuron_classic_genotype.bias],
+	NewNeuronGenotype = NeuronGenotype#neuron_classic_genotype{bias = NewBias},
+	%3) Update the neuron
+	genotype:update_element_genotype(Genotype, NeuronId, NewNeuronGenotype),
+	Mutation = #{type => bias, neuron_id => NeuronId, old_bias => NeuronGenotype#neuron_classic_genotype.bias, new_bias => NewBias},
+	{Genotype, Mutations ++ [Mutation]}.
 
 mutate_af({Genotype, Mutations}, Constraint)->
-	%{af,Afs}=lists:keyfind(af,1,Constraint),
-	%#genotype{neurons=Neurons}=Genotype,
-	%Neuron=?RANDCHOOSE(Neurons),
-	%RemainNeurons=Neurons--[Neuron],
-	%OldAf = Neuron#neuron_classic_phenotype.af,
-	%NewAf=?RANDCHOOSE(Afs),
-	%MutatedNeuron=Neuron#neuron_classic_phenotype{af=NewAf},
-	%Mutation = #{type => activation_function, neuron_id => Neuron#neuron_classic_phenotype.id, old_af => OldAf, new_af => NewAf},
-	%{Genotype#genotype{neurons=lists:keysort(3,[MutatedNeuron]++RemainNeurons)}, Mutations ++ [Mutation]}.
-	ok.
+	{af,Afs} = lists:keyfind(af, 1, Constraint),
+	%1) Select random neuron
+	NeuronId = ?RANDCHOOSE(genotype:get_neuron_ids(Genotype)),
+	NeuronGenotype = genotype:get_element_by_id(NeuronId),
+	%2) Modify the activation function
+	NewAf = ?RANDCHOOSE(Afs),
+	NewNeuronGenotype = NeuronGenotype#neuron_classic_genotype{activation_function = NewAf},
+	%3) Update the neuron
+	genotype:update_element_genotype(Genotype, NeuronId, NewNeuronGenotype),
+	Mutation = #{type => activation_function, neuron_id => NeuronId, old_af => NeuronGenotype#neuron_classic_genotype.activation_function, new_af => NewAf},
+	{Genotype, Mutations ++ [Mutation]}.
 
-add_neuro_link({Genotype, Mutations}, Constraint)->%link tra neuroni,o su se stesso oppure con un altro neurone in qualsiasi strato.
-	%{plast,Plasts}=lists:keyfind(plast,1,Constraint),
-	%#genotype{neurons=Neurons}=Genotype,
-	%NeuronIn=?RANDCHOOSE(Neurons),
-	%NeuronOut=?RANDCHOOSE(Neurons),
-	%RemainNeurons=Neurons--[NeuronIn,NeuronOut],
-	%case exist_link([NeuronIn,NeuronOut]) of%se non c'è un link allora muto se no non muto
-	%	false->MutatedNeurons=case NeuronIn of
-	%		NeuronOut->% è stato selezionato lo stesso neurone è sicuramente una connessione all'indietro
-	%			NewNeuron=NeuronIn#neuron_classic_phenotype{roouts=NeuronIn#neuron_classic_phenotype.roouts++[NeuronIn#neuron_classic_phenotype.id],roinsWeights=NeuronIn#neuron_classic_phenotype.roinsWeights++[genotype:create_weight(hebbian,NeuronIn)]},
-	%			[NewNeuron];
-	%		_->
-	%			{NewNeuron1,NewNeuron2}=connect(NeuronIn,NeuronOut,Plasts),
-	%			[NewNeuron1,NewNeuron2]
-	%		end,
-	%		Mutation = #{type => neuro_link, link_from => NeuronIn#neuron_classic_phenotype.id, link_to => NeuronOut#neuron_classic_phenotype.id},
-	%		{Genotype#genotype{neurons=lists:keysort(3,MutatedNeurons++RemainNeurons)}, Mutations ++ [Mutation]};
-	%	true->{Genotype, Mutations}
-	%end.
-	ok.
+add_neuro_link({Genotype, Mutations}, Constraint) ->%link tra neuroni,o su se stesso oppure con un altro neurone in qualsiasi strato.
+	{plast, Plasts} = lists:keyfind(plast, 1, Constraint),
+	%1) Select two random neurons
+	{NeuronIdFrom, NeuronIdTo} = {?RANDCHOOSE(genotype:get_neuron_ids(Genotype)), ?RANDCHOOSE(genotype:get_neuron_ids(Genotype))},
+	{NeuronFromGenotype, NeuronToGenotype} = {genotype:get_element_by_id(NeuronIdFrom), genotype:get_element_by_id(NeuronIdTo)},
+	%2) Add the synapse between the two neurons if not already exist
+	case genotype:get_synapses(Genotype, NeuronIdFrom, NeuronIdTo) of%se non c'è un link allora muto se no non muto
+		false ->
+			%2.1) Get the synapse direction
+			ConnectionDirection = case NeuronToGenotype#neuron_classic_genotype.layer =< NeuronFromGenotype#neuron_classic_genotype.layer of
+									true -> recurrent;
+									false -> forward
+								  end,
+			%2.2) Create the plasticity for the synapse
+			PlasticityModulator = plasticity:random_plasticity(Plasts),
+			%2.3) Add the synapse
+			genotype:add_synapses(Genotype, NeuronIdFrom, NeuronIdTo, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => ConnectionDirection}),
+			Mutation = #{type => neuro_link, link_from => NeuronIdFrom, link_to => NeuronIdTo},
+			{Genotype, Mutations ++ [Mutation]};
+		_ -> 
+			{Genotype, Mutations}
+	end.
 
-add_sensor_link({Genotype, Mutations}, Constraint)->
-	%{plast,Plasts}=lists:keyfind(plast,1,Constraint),
-	%#genotype{cortex=Cortex,sensors=Sensors,neurons=Neurons}=Genotype,
-	%SensorId,NeuronId}={?RANDCHOOSE(Cortex#cortex_phenotype.sensorsIds),?RANDCHOOSE(Cortex#cortex_phenotype.neuronsIds)},
-	%PredSensor=fun(Sensor)->Sensor#sensor_phenotype.id==SensorId end,
-	%{[Sensor],OtherSensors}=lists:partition(PredSensor,Sensors),
-	%PredNeuron=fun(Neuron)->Neuron#neuron_classic_phenotype.id==NeuronId end,
-	%{[Neuron],OtherNeurons}=lists:partition(PredNeuron,Neurons),
-	%case exist_link([Sensor,Neuron]) of
-	%	false->
-	%		{NewSensor,NewNeuron}=connect(Sensor,Neuron,Plasts),
-	%		Mutation = #{type => sensor_link, link_from => Sensor#sensor_phenotype.id, link_to => Neuron#neuron_classic_phenotype.id},
-	%		{Genotype#genotype{sensors=OtherSensors++[NewSensor],neurons=lists:keysort(3,[NewNeuron]++OtherNeurons)}, Mutations ++ [Mutation]};
-	%	true->{Genotype, Mutations}
-	%end.
-	ok.
+add_sensor_link({Genotype, Mutations}, Constraint) ->
+	{plast,Plasts} = lists:keyfind(plast, 1, Constraint),
+	%1) Select a random sensor and a random neuron
+	{SensorId, NeuronId} = {?RANDCHOOSE(genotype:get_neurons_ids(Genotype)), ?RANDCHOOSE(genotype:get_sensors_ids(Genotype))},
+	{SensorGenotype, NeuronGenotype} = {genotype:get_element_by_id(SensorId), genotype:get_element_by_id(NeuronId)},
+	%2) Add the synapse between the sensor and the neuron if not already exist
+	case genotype:get_synapses(Genotype, SensorId, NeuronId) of
+		false->
+			%2.1) Create the plasticity for the synapse
+			PlasticityModulator = plasticity:random_plasticity(Plasts),
+			%2.2) Add the synapse
+			genotype:add_synapses(Genotype, SensorId, NeuronId, #{signal_len => SensorGenotype#sensor_genotype.signal_input_length, tag => {sensor, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+			Mutation = #{type => sensor_link, link_from => SensorId, link_to => NeuronId},
+			{Genotype, Mutations ++ [Mutation]};
+		true ->
+			{Genotype, Mutations}
+	end.
 
 add_neuron({Genotype, Mutations}, Constraint)->
-	%{plast,Plasts}=lists:keyfind(plast,1,Constraint),
-	%{af,Afs}=lists:keyfind(af,1,Constraint),
-	%#genotype{sensors=Sensors,neurons=Neurons,cortex=Cortex}=Genotype,
-	%Layers=genotype:get_layers(Genotype),
-	%[H|T]=Layers,
-	%case T of
-	%	[]->Genotype;%se ho un solo layer allora niente
-	%	_->L=?RANDCHOOSE(lists:droplast(Layers)),%ho almeno due strati
-	%		NewNeuron=genotype:create_neuron(?RANDCHOOSE(Afs),L),
-	%		case L of
-	%			H->%ho scelto il primo strato
-	%				Sensor=?RANDCHOOSE(Sensors),
-	%				Neuron=?RANDCHOOSE([N||N<-Neurons,N#neuron_classic_phenotype.layer>L]),%seleziono un neurone da uno strato superiore
-	%				RemainSensors=Sensors--[Sensor],
-	%				RemainNeurons=Neurons--[Neuron],
-	%				{NewSensor,NewNeuronConnIn}=connect(Sensor,NewNeuron,Plasts),
-	%				{NewConnected,NewOut}=connect(NewNeuronConnIn,Neuron,Plasts),
-	%				NewCortex=Cortex#cortex_phenotype{neuronsIds=Cortex#cortex_phenotype.neuronsIds++[NewNeuron#neuron_classic_phenotype.id]},
-	%				Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron_classic_phenotype.id, connected_with => {Sensor#sensor_phenotype.id, Neuron#neuron_classic_phenotype.id}},
-	%				{Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex}, Mutations ++ [Mutation]};
-	%			_->
-	%				NeuronSup=?RANDCHOOSE([N||N<-Neurons,N#neuron_classic_phenotype.layer>L]),%seleziono un neurone da uno strato superiore
-	%				NeuronInf=?RANDCHOOSE([N||N<-Neurons,N#neuron_classic_phenotype.layer<L]),%seleziono un neurone da uno strato inferiore
-	%				RemainNeurons=Neurons--[NeuronSup,NeuronInf],
-	%				{NewInf,NewNeuronConnIn}=connect(NeuronInf,NewNeuron,Plasts),
-	%				{NewConnected,NewSup}=connect(NewNeuronConnIn,NeuronSup,Plasts),
-	%				NewCortex=Cortex#cortex_phenotype{neuronsIds=Cortex#cortex_phenotype.neuronsIds++[NewNeuron#neuron_classic_phenotype.id]},
-	%				Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron_classic_phenotype.id, connected_with => {NeuronInf#neuron_classic_phenotype.id, NeuronSup#neuron_classic_phenotype.id}},
-	%				{Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}, Mutations ++ [Mutation]}
-	%		end
-	%end.
-	ok.
+	{plast, Plasts} = lists:keyfind(plast, 1, Constraint),
+	{af, Afs} = lists:keyfind(af, 1, Constraint),
+	Layers = genotype:get_layers(Genotype),
+	[H | T] = Layers,
+	case length(Layers) of
+		1 -> 
+			%If the only one layer no mutation, because it would be connected to the actuator and consequently the length of the output signal would be increased. 
+			%But the scape only accepts signals of a certain length 
+			{Genotype, Mutations};
+		_ -> 
+			LayerWhereInsertTheNeuron = ?RANDCHOOSE(lists:droplast(Layers)),
+			PlasticityModulator = plasticity:random_plasticity(Plasts),
+			ActivationFunction = ?RANDCHOOSE(Afs),
+			%1) Create the new neuron
+			NewNeuronId = genotype:add_neuron(Genotype, #{layer => LayerWhereInsertTheNeuron, activation_function => ActivationFunction}),
+			case LayerWhereInsertTheNeuron of
+				%A neuron will be inserted at the first layer
+				H -> 
+					%1) Select a random sensor
+					SensorId = ?RANDCHOOSE(genotype:get_sensors_ids(Genotype)),
+					%2) Select a random neuron of a layer greater than the current layer
+					Predicate = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer > LayerWhereInsertTheNeuron end,
+					SelectFun = fun(Neuron) -> Neuron#neuron_classic_genotype.id end,
+					NeuronId = genotype:get_select_on_elements_filtered(Genotype, Predicate, SelectFun),
+					%3) Get the genotype of the sensor
+					SensorGenotype = genotype:get_element_by_id(SensorId),
+					%4) Add the synapses between sensor -> new neuron and new neuron -> NeuronId
+					genotype:add_synapses(Genotype, SensorId, NewNeuronId, #{signal_len => SensorGenotype#sensor_genotype.signal_input_length, tag => {sensor, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+					genotype:add_synapses(Genotype, NewNeuronId, NeuronId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+					Mutation = #{type => add_neuron, neuron_id => NewNeuronId, connected_with => {SensorId, NeuronId}},
+					{Genotype, Mutations ++ [Mutation]};
+				%A neuron will be inserted in some hidden layer
+				_ ->
+					SelectFun = fun(Neuron) -> Neuron#neuron_classic_genotype.id end,
+					%1) Get a random neuron from a layer more less than current layer
+					PredicateInferior = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer < LayerWhereInsertTheNeuron end,
+					NeuronInferiorId = genotype:get_select_on_elements_filtered(Genotype, PredicateInferior, SelectFun),
+					%2) Get a random neuron from a layer greater than current layer
+					PredicateSuperior = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer > LayerWhereInsertTheNeuron end,
+					NeuronSuperiorId = genotype:get_select_on_elements_filtered(Genotype, PredicateSuperior, SelectFun),
+					%3) Add the synapses between neuron inf -> new neuron and new neuron -> neuron sup
+					genotype:add_synapses(Genotype, NeuronInferiorId, NewNeuronId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+					genotype:add_synapses(Genotype, NewNeuronId, NeuronSuperiorId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+					Mutation = #{type => add_neuron, neuron_id => NewNeuronId, connected_with => {NeuronInferiorId, NeuronSuperiorId}},
+					{Genotype, Mutations ++ [Mutation]}
+			end
+	end.
 
-add_layer_neuron({Genotype, Mutations}, Constraint)->%aggiunge un nuovo strato tra due strati con un nuovo neurone connesso
-	%{plast,Plasts}=lists:keyfind(plast,1,Constraint),
-	%{af,Afs}=lists:keyfind(af,1,Constraint),
-	%#genotype{sensors=Sensors,neurons=Neurons,cortex=Cortex}=Genotype,
-	%Layers=genotype:get_layers(Genotype),
-	%[H|_]=Layers,
-	%case Layers of
-	%	[1]->%se ho un solo strato,allora connetto tra sensori e neuroni
-	%		Sensor=?RANDCHOOSE(Sensors),
-	%		NewNeuron=genotype:create_neuron(?RANDCHOOSE(Afs),0.5),%lo vado a mettere come primo strato
-	%		Neuron=?RANDCHOOSE(Neurons),%seleziono un neurone dal primo strato
-	%		RemainSensors=Sensors--[Sensor],
-	%		RemainNeurons=Neurons--[Neuron],%%cavo i neuroni selezionati
-	%		{NewSensor,NewNeuronConnIn}=connect(Sensor,NewNeuron,Plasts),
-	%		{NewConnected,NewOut}=connect(NewNeuronConnIn,Neuron,Plasts),
-	%		NewCortex=Cortex#cortex_phenotype{neuronsIds=Cortex#cortex_phenotype.neuronsIds++[NewNeuron#neuron_classic_phenotype.id]},
-	%		Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron_classic_phenotype.id, connected_with => {Sensor#sensor_phenotype.id, Neuron#neuron_classic_phenotype.id}},
-	%		{Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex}, Mutations ++ [Mutation]};
-	%	Layers->%altrimenti
-	%		L=?RANDCHOOSE(lists:droplast(Layers)),%seleziona uno strato interno tranne l'ultimo
-	%		case ?RANDCHOOSE([0,1]) of%lancio una moneta
-	%			0->%lo inserisco prima di L
-	%				case L of
-	%					H->%se L è il primo strato
-	%						Sensor=?RANDCHOOSE(Sensors),
-	%						NewLayer=(L+0)/2,
-	%						NewNeuron=genotype:create_neuron(?RANDCHOOSE(Afs),NewLayer),
-	%						SupNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron_classic_phenotype.layer==L]),%seleziona un neurone casualmente allo strato successivo
-	%						RemainSensors=Sensors--[Sensor],
-	%						RemainNeurons=Neurons--[SupNeuron],
-	%						{NewSensor,NewNeuronConnIn}=connect(Sensor,NewNeuron,Plasts),
-	%						{NewConnected,NewOut}=connect(NewNeuronConnIn,SupNeuron,Plasts),
-	%						NewCortex=Cortex#cortex_phenotype{neuronsIds=Cortex#cortex_phenotype.neuronsIds++[NewNeuron#neuron_classic_phenotype.id]},
-	%						Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron_classic_genotype.id, connected_with => {Sensor#sensor_phenotype.id, SupNeuron#neuron_classic_genotype.id}},
-	%						{Genotype#genotype{sensors=RemainSensors++[NewSensor],neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewOut]),cortex=NewCortex}, Mutations ++ [Mutation]};
-	%					_->
-	%					{InfLayers,_}=lists:splitwith(fun(N)->N<L end,Layers--[L]),%prendi gli strati inferiori
-	%					LastLayer=lists:last(InfLayers),
-	%					NewLayer=(L+LastLayer)/2,%lo sto inserendo prima di L
-	%					NewNeuron=genotype:create_neuron(?RANDCHOOSE(Afs),NewLayer),%lo vado a mettere in mezzo tra L e L+1
-	%					InfNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron_classic_genotype.layer==LastLayer]),%seleziona un neurone casualmente tra i neurone dello strato PRIMA di L
-	%					SupNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron_classic_genotype.layer==L]),%seleziona un neurone casualmente tra i neurone dell strato L
-	%					RemainNeurons=Neurons--[InfNeuron,SupNeuron],%%cavo i neuroni selezionati
-	%					{NewInf,NewNeuronConnIn}=connect(InfNeuron,NewNeuron,Plasts),
-	%					{NewConnected,NewSup}=connect(NewNeuronConnIn,SupNeuron,Plasts),
-	%					NewCortex=Cortex#cortex_phenotype{neuronsIds=Cortex#cortex_phenotype.neuronsIds++[NewNeuron#neuron_classic_genotype.id]},
-	%					Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron_classic_genotype.id, connected_with => {InfNeuron#neuron_classic_genotype.id, SupNeuron#neuron_classic_genotype.id}},
-	%					{Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}, Mutations ++ [Mutation]}
-	%				end;
-	%			1->%lo inserisco dopo di L
-	%				{_,SupLayers}=lists:splitwith(fun(N)->N<L end,Layers--[L]),%prendi gli strati superiori
-	%				NextLayer=hd(SupLayers),
-	%				NewLayer=(L+NextLayer)/2,%lo sto inserendo dopo di L
-	%				NewNeuron=genotype:create_neuron(?RANDCHOOSE(Afs),NewLayer),%lo vado a mettere in mezzo tra L e L+1
-	%				SupNeuron=?RANDCHOOSE([Neuron||Neuron<-Neurons,Neuron#neuron_classic_genotype.layer==NextLayer]),%seleziona un neurone casualmente tra i neurone dello strato SUCCESSIVO ad L
-	%				RemainNeurons=Neurons--[InfNeuron,SupNeuron],%%cavo i neuroni selezionati
-	%				{NewInf,NewNeuronConnIn}=connect(InfNeuron,NewNeuron,Plasts),
-	%				{NewConnected,NewSup}=connect(NewNeuronConnIn,SupNeuron,Plasts),
-	%				NewCortex=Cortex#cortex_phenotype{neuronsIds=Cortex#cortex_phenotype.neuronsIds++[NewNeuron#neuron_classic_genotype.id]},
-	%				Mutation = #{type => add_neuron, neuron_id => NewNeuron#neuron_classic_genotype.id, connected_with => {InfNeuron#neuron_classic_genotype.id, SupNeuron#neuron_classic_genotype.id}},
-	%				{Genotype#genotype{neurons=lists:keysort(3,RemainNeurons++[NewConnected,NewInf,NewSup]),cortex=NewCortex}, Mutations ++ [Mutation]}
-	%		end
-	%end.
-	ok.	
-
-%connect(N1,N2,Plasts)when N1#neuron_classic_genotype.layer<N2#neuron_classic_genotype.layer->%è una connessione in avanti
-	%Plast=plasticity:random_plasticity(Plasts),
-	%NewN1=N1#neuron_classic_phenotype{fanouts=N1#neuron_classic_phenotype.fanouts++[N2#neuron_classic_genotype.id]},
-	%NewN2=N2#neuron{faninsWeights=N2#neuron.faninsWeights++[genotype:create_weight(Plast,N1)]},
-	%NewN2 = null,
-	%{NewN1,NewN2};
-%connect(N1,N2,Plasts)when N1#neuron_classic_genotype.layer>=N2#neuron_classic_genotype.layer->%è una connessione all'indietro
-	%Plast=plasticity:random_plasticity(Plasts),
-	%NewN1=N1#neuron_classic_phenotype{roouts=N1#neuron_classic_phenotype.roouts++[N2#neuron_classic_genotype.id]},
-	%NewN2=none, %N2#neuron{roinsWeights=N2#neuron.roinsWeights++[genotype:create_weight(Plast,N1)]},
-	%{NewN1,NewN2};
-%connect(Sensor,Neuron,Plasts) when is_record(Sensor,sensor_genotype)->
-	%Plast=plasticity:random_plasticity(Plasts),
-	%NewSensor=Sensor#sensor_phenotype{fanouts=Sensor#sensor_phenotype.fanouts++[Neuron#neuron_classic_genotype.id]},
-	%NewNeuron=none, %Neuron#neuron{faninsWeights=Neuron#neuron.faninsWeights++[genotype:create_weight(Plast,Sensor)]},
-	%{NewSensor,NewNeuron}.
-
-
-%exist_link([#neuron_classic_phenotype{id=Id,roouts=RoOuts}])->
-%	lists:member(Id,RoOuts);
-%exist_link([#sensor_phenotype{fanouts=Outs},#neuron_classic_phenotype{id=Id}])->
-%	lists:member(Id,Outs);
-%exist_link([#neuron_classic_phenotype{layer=L1,fanouts=Outs},#neuron_classic_phenotype{id=Id2,layer=L2}])when L1<L2->
-%	lists:member(Id2,Outs);
-%exist_link([#neuron_classic_phenotype{id=Id1,layer=L1},#neuron_classic_phenotype{layer=L2,roouts=RoOuts}])when L1>=L2->
-%	lists:member(Id1,RoOuts).
+add_layer_neuron({Genotype, Mutations}, Constraint) ->%add a new layer between two other layers
+	{plast, Plasts} = lists:keyfind(plast, 1, Constraint),
+	{af, Afs} = lists:keyfind(af, 1, Constraint),
+	PlasticityModulator = plasticity:random_plasticity(Plasts),
+	ActivationFunction = ?RANDCHOOSE(Afs),
+	Layers = genotype:get_layers(Genotype),
+	[FirstLayer | _] = Layers,
+	case length(Layers) of
+		%If i have only one layer, create a connection between a random sensor -> new neuron and new neuron -> random neuron of first layer
+		1 -> 
+			%1) Create the new neuron
+			NewNeuronId = genotype:add_neuron(Genotype, #{layer => FirstLayer / 2, activation_function => ActivationFunction}),
+			%2) Select a random sensor
+			SensorId = ?RANDCHOOSE(genotype:get_sensors_ids(Genotype)),
+			%3) Select a random neuron of the first layer
+			Predicate = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer == FirstLayer end,
+			SelectFun = fun(Neuron) -> Neuron#neuron_classic_genotype.id end,
+			NeuronId = ?RANDCHOOSE(genotype:get_select_on_elements_filtered(Genotype, Predicate, SelectFun)),
+			%4) Create the connection from the sensor to the new neuron
+			SensorGenotype = genotype:get_element_by_id(SensorId),
+			genotype:add_synapses(Genotype, SensorId, NewNeuronId, #{signal_len => SensorGenotype#sensor_genotype.signal_input_length, tag => {sensor, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}), 
+			%5) Create the connection from the new neuron to the random neuron
+			genotype:add_synapses(Genotype, NewNeuronId, NeuronId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+			Mutation = #{type => add_layer_neuron, neuron_id => NewNeuronId, connected_with => {SensorId, NeuronId}},
+			{Genotype, Mutations ++ [Mutation]};
+		N when N > 1 ->
+			LayerReference = ?RANDCHOOSE(lists:droplast(Layers)),
+			%1) Choose randomly if insert the new layer before or after the reference layer above
+			case ?RANDCHOOSE([0,1]) of
+				% Insert before the reference layer
+		 		0 ->
+					case LayerReference of
+						% If the layer reference is the first layer, equal to the case with only 1 layer
+						FirstLayer -> 
+							%1) Create the new neuron
+							NewNeuronId = genotype:add_neuron(Genotype, #{layer => FirstLayer / 2, activation_function => ActivationFunction}),
+							%2) Select a random sensor
+							SensorId = ?RANDCHOOSE(genotype:get_sensors_ids(Genotype)),
+							%3) Select a random neuron of the first layer
+							Predicate = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer == FirstLayer end,
+							SelectFun = fun(Neuron) -> Neuron#neuron_classic_genotype.id end,
+							NeuronId = ?RANDCHOOSE(genotype:get_select_on_elements_filtered(Genotype, Predicate, SelectFun)),
+							%4) Create the connection from the sensor to the new neuron
+							SensorGenotype = genotype:get_element_by_id(SensorId),
+							genotype:add_synapses(Genotype, SensorId, NewNeuronId, #{signal_len => SensorGenotype#sensor_genotype.signal_input_length, tag => {sensor, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}), 
+							%5) Create the connection from the new neuron to the random neuron
+							genotype:add_synapses(Genotype, NewNeuronId, NeuronId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+							Mutation = #{type => add_layer_neuron, neuron_id => NewNeuronId, connected_with => {SensorId, NeuronId}},
+							{Genotype, Mutations ++ [Mutation]};
+						%else
+						_ ->
+							%1) Get the index layer before the reference layer
+							{InfLayers, _} = lists:splitwith(fun(N) -> N < LayerReference end, Layers),
+							LastLayerBefeorReferenceLayer = lists:last(InfLayers),
+							%2) Create the new index layer
+							NewLayerIndex = (LastLayerBeforeReferenceLayer + LayerReference) / 2,
+							%3) Create the new neuron
+							NewNeuronId = genotype:add_neuron(Genotype, #{layer => NewLayerIndex, activation_function => ActivationFunction}),
+							%4) Create the connection from a random neuron in the layer before the reference layer and the new neuron
+							PredicateInf = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer == LastLayerBefeorReferenceLayer end,
+							SelectFun = fun(Neuron) -> Neuron#neuron_classic_genotype.id end,
+							NeuronInfId = ?RANDCHOOSE(genotype:get_select_on_elements_filtered(Genotype, PredicateInf, SelectFun)),
+							genotype:add_synapses(Genotype, NeuronInfId, NewNeuronId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+							%5) Create the connection from the new neuron and a random neuron in the reference layer
+							PredicateSup = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer == LayerReference end,
+							NeuronSupId = ?RANDCHOOSE(genotype:get_select_on_elements_filtered(Genotype, PredicateInf, SelectFun)),
+							genotype:add_synapses(Genotype, NewNeuronId, NeuronSupId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+							Mutation = #{type => add_layer_neuron, neuron_id => NewNeuronId, connected_with => {NeuronInfId, NeuronSupId}},
+							{Genotype, Mutations ++ [Mutation]}
+						end;
+				% Insert after the reference layer
+				1 -> 
+					%1) Get the index layer after the reference layer.
+					{_, SupLayers} = lists:splitwith(fun(N) -> N <= LayerReference end, Layers),
+					LayerNextReferenceLayer = lists:last(SupLayers),
+					%2) Create the new index layer
+					NewLayerIndex = (LayerNextReferenceLayer + LayerReference) / 2,
+					%3) Create the new neuron
+					NewNeuronId = genotype:add_neuron(Genotype, #{layer => NewLayerIndex, activation_function => ActivationFunction}),
+					%4) Create the connection from a random neuron in the layer reference and the new neuron
+					PredicateInf = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer == LayerReference end,
+					SelectFun = fun(Neuron) -> Neuron#neuron_classic_genotype.id end,
+					NeuronInfId = ?RANDCHOOSE(genotype:get_select_on_elements_filtered(Genotype, PredicateInf, SelectFun)),
+					genotype:add_synapses(Genotype, NeuronInfId, NewNeuronId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+					%5) Create the connection from the new neuron and a random neuron in the layer after reference layer
+					PredicateSup = fun(Element) -> is_record(Element, neuron_classic_genotype) andalso Element#neuron_classic_genotype.layer == LayerNextReferenceLayer end,
+					NeuronSupId = ?RANDCHOOSE(genotype:get_select_on_elements_filtered(Genotype, PredicateInf, SelectFun)),
+					genotype:add_synapses(Genotype, NewNeuronId, NeuronSupId, #{signal_len => 1, tag => {neuron, neuron}, modulation_type => PlasticityModulator, connection_direction => forward}),
+					Mutation = #{type => add_layer_neuron, neuron_id => NewNeuronId, connected_with => {NeuronInfId, NeuronSupId}},
+					{Genotype, Mutations ++ [Mutation]}
+			end
+	end
