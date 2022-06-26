@@ -305,6 +305,6 @@ apply_to_scape(fit_predict, Agent) ->
 	end.
 
 %%Given a value Val, it perturb the value and return the perturbed val NewVal.
-perturbate(Val)->
-	NewVal = ?RAND * ?SAT_LIMIT + Val,
-	math_utils:saturate(NewVal, -?SAT_LIMIT, ?SAT_LIMIT).
+perturbate(Val) ->
+	NewVal = rand:normal() * Val,
+	NewVal.

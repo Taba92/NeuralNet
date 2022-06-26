@@ -22,7 +22,7 @@ catch_overflow(Operation, OverFlowOutPut) when is_function(Operation) ->
 
 %Given a Value and a range Min<X<Max
 %mantain the Value in the range if it exceed
-saturate(Value,Min,Max)->
+saturate(Value, Min, Max)->
 	if
 		Value < Min -> Min;
 		Value > Max -> Max;

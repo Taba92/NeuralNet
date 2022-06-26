@@ -246,7 +246,7 @@ get_layers(Genotype) ->
 	SelectFun = fun(NeuronGenotype) ->
 					case NeuronGenotype of
 						#neuron_classic_genotype{layer = Layer} -> Layer;
-						#neuron_som_genotype{coordinates = {X, Y}} -> X
+						#neuron_som_genotype{coordinates = {X, _}} -> X
 					end
 				end,
 	Layers = lists:usort(get_select_on_elements_filtered(Genotype, Predicate, SelectFun)),
@@ -282,8 +282,10 @@ get_elements_ids(Genotype) ->
 	digraph:vertices(Genotype#genotype.network).
 
 get_element_by_id(Genotype, ElementId) ->
-	{ElementId, Data} = digraph:vertex(Genotype#genotype.network, ElementId),
-	Data.
+	case digraph:vertex(Genotype#genotype.network, ElementId) of
+		{ElementId, Data} -> Data;
+		false -> false
+	end.
 
 get_sensors(Genotype) ->
 	Predicate = fun(El) -> is_record(El, sensor_genotype) end,
@@ -334,7 +336,6 @@ get_synapses_ids(Genotype) ->
 
 get_synapses(Genotype, IdFrom, IdTo) ->
 	EdgeId = {IdFrom, IdTo},
-	%{EdgeId, IdFrom, IdTo, EdgeInfo} = digraph:edge(Genotype#genotype.network, EdgeId),
 	case digraph:edge(Genotype#genotype.network, EdgeId) of
 		{EdgeId, IdFrom, IdTo, EdgeInfo} -> EdgeInfo;
 		false -> false
