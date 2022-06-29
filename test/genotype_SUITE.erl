@@ -10,14 +10,15 @@
 		add_sensor_from_label_test/1, add_sensor_from_model_test/1,
 		add_actuator_from_label_test/1, add_actuator_from_model_test/1,
 		get_elements_filtered_test/1, get_select_on_elements_filtered_test/1,
-		get_element_by_id_test/1,
+		get_element_by_id_test/1, get_elements_ids_test/1, get_layers_test/1,
 		get_cortex_id_test/1, get_cortex_test/1,
 		get_sensors_ids_test/1, get_sensors_test/1,
 		get_actuators_ids_test/1, get_actuators_test/1, 
 		get_neuron_ids_som_test/1, get_neurons_som_test/1,
 		get_neuron_ids_classic_test/1, get_neurons_classic_test/1,
-		get_synapses_test/1,
-		delete_element_test/1, delete_synapse_test/1
+		get_synapses_test/1, get_synapses_ids_test/1,
+		delete_element_test/1, delete_synapse_test/1,
+		update_element_genotype_test/1, update_synapse_genotype_test/1
 	]).
 -include_lib("common_test/include/ct.hrl").
 -include_lib("stdlib/include/assert.hrl").
@@ -33,14 +34,15 @@ all() -> [create_som, create_ffnn, create_rnn, create_rnn2,
 		add_sensor_from_label_test, add_sensor_from_model_test,
 		add_actuator_from_label_test, add_actuator_from_model_test,
 		get_elements_filtered_test, get_select_on_elements_filtered_test,
-		get_element_by_id_test,
+		get_element_by_id_test, get_elements_ids_test, get_layers_test,
 		get_cortex_id_test, get_cortex_test,
 		get_sensors_ids_test, get_sensors_ids_test,
 		get_actuators_ids_test, get_actuators_test, 
 		get_neuron_ids_som_test, get_neurons_som_test,
 		get_neuron_ids_classic_test, get_neurons_classic_test,
-		get_synapses_test,
-		delete_element_test, delete_synapse_test
+		get_synapses_test, get_synapses_ids_test,
+		delete_element_test, delete_synapse_test,
+		update_element_genotype_test, update_synapse_genotype_test
 	].
 
 
@@ -155,7 +157,6 @@ add_cortex_from_model_test(_) ->
 	%Check if the cortex is added
 	?assert(length(Vertices) == 1).
 
-
 add_sensor_from_label_test(_) ->
 	Genotype = genotype:new(classic),
 	genotype:add_sensor(Genotype, #{signal_input_length => 5, fit_directives => [], real_directives => []}),
@@ -191,7 +192,6 @@ get_elements_filtered_test(_) ->
 	[Neuron] = ElementsFiltered,
 	?assert(is_record(Neuron, neuron_classic_genotype)).
 
-
 get_select_on_elements_filtered_test(_) ->
 	Genotype = get_default_genotype(),
 	Predicate = fun(Element) -> case is_record(Element, sensor_genotype) of true -> true; false -> false end end,
@@ -209,6 +209,20 @@ get_element_by_id_test(_) ->
 	?assert(is_record(Element, neuron_classic_genotype)),
 	%Check the bias of the neuron
 	?assert(Element#neuron_classic_genotype.bias == 4).
+
+get_elements_ids_test(_) ->
+	Genotype = get_default_genotype(),
+	NodesIds = genotype:get_elements_ids(Genotype),
+	?assert(lists:member(1, NodesIds)),
+	?assert(lists:member(2, NodesIds)),
+	?assert(lists:member(3, NodesIds)),
+	?assert(lists:member(4, NodesIds)),
+	?assert(lists:member(5, NodesIds)).
+
+ get_layers_test(_) ->
+	Genotype = get_default_genotype(),
+	Layers = genotype:get_layers(Genotype),
+	?assert(Layers == [1, 1.5]).
 
 get_sensors_test(_) ->
 	Genotype = get_default_genotype(),
@@ -293,6 +307,11 @@ get_synapses_test(_) ->
 	%Check if is the synapse we want
 	?assert(Synapse#synapses.id_from == 2 andalso Synapse#synapses.id_to == 4).
 
+get_synapses_ids_test(_) ->
+	Genotype = get_default_genotype(),
+	SynapsesIds = genotype:get_synapses_ids(Genotype),
+	?assert(SynapsesIds == [{2, 4}]).
+
 delete_element_test(_) ->
 	Genotype = get_default_genotype(),
 	genotype:delete_element(Genotype, 5),
@@ -303,8 +322,23 @@ delete_synapse_test(_) ->
 	Genotype = get_default_genotype(),
 	genotype:delete_synapse(Genotype, 2, 4),
 	%Check if there is no more the edge
-	?assert(digraph:edge(Genotype#genotype.network, {2,4}) == false). 
-%%%
+	?assert(digraph:edge(Genotype#genotype.network, {2,4}) == false).
+
+update_element_genotype_test(_) ->
+	Genotype = get_default_genotype(),
+	NewNeuronGenotype = #neuron_classic_genotype{id = 2, bias = 5},
+	genotype:update_element_genotype(Genotype, 2, NewNeuronGenotype),
+	%Check the updated element
+	UpdatedNeuron = genotype:get_element_by_id(Genotype, 2),
+	?assert(UpdatedNeuron#neuron_classic_genotype.bias == 5).
+
+update_synapse_genotype_test(_) ->
+	Genotype = get_default_genotype(),
+	NewSynapseGenotype = #synapses{id_from = 2, id_to = 4, weight = [4, 5]},
+	genotype:update_synapse_genotype(Genotype, 2, 4, NewSynapseGenotype),
+	%Check the updated synapse
+	UpdatedSynapse = genotype:get_synapses(Genotype, 2, 4),
+	?assert(UpdatedSynapse#synapses.weight == [4, 5]).
 
 create_som(_)->
     SensorSpec = {3, [], []},
@@ -334,7 +368,7 @@ create_rnn2(_) ->
     Genotype = genotype:create_NN({{rnn, 1}, identity, none}, SensorSpec, ActuatorSpec, CortexSpec, [2, 2, 2]),
 	print_genotype(Genotype).
 
-
+%%%Private function for this test module
 print_genotype(Genotype) ->
 	Vertices = digraph:vertices(Genotype#genotype.network),
 	Network = get_node_and_connection(Genotype#genotype.network, Vertices, []),
@@ -357,10 +391,10 @@ get_edge_label(out, Graph, {_, _, V2, _}) ->
 get_default_genotype() ->
 	Genotype = genotype:new(classic),
 	genotype:add_element_with_genotype(Genotype, #sensor_genotype{id = 1, signal_input_length = 3}),
-	genotype:add_element_with_genotype(Genotype, #neuron_classic_genotype{id = 2, bias = 4}),
-	genotype:add_element_with_genotype(Genotype, #neuron_som_genotype{id = 3, weight = 5}),
+	genotype:add_element_with_genotype(Genotype, #neuron_classic_genotype{id = 2, layer = 1, bias = 4}),
+	genotype:add_element_with_genotype(Genotype, #neuron_som_genotype{id = 3, coordinates = {1.5, 0}, weight = 5}),
 	genotype:add_element_with_genotype(Genotype, #actuator_genotype{id = 4, number_of_clients = 1}),
 	genotype:add_element_with_genotype(Genotype, #cortex_genotype{id = 5}),
-	genotype:add_element_with_genotype(Genotype, #synapses{id_from = 2, id_to = 4}),
+	genotype:add_element_with_genotype(Genotype, #synapses{id_from = 2, id_to = 4, weight = [1,2]}),
 	Genotype.
 %%%

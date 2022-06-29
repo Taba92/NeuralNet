@@ -104,7 +104,6 @@ handle_cast({ElType, FromLayer, IdFrom, FwdType, Signal}, State) when ElType == 
 								false ->
 									{Recv ++ [{IdFrom, Signal}], RecurrentRecv}
 							end,
-	%{PrunRecv,PrunRoRecv}={NewRecv,NewRoRecv},
 	%Could be doubled input signals!
 	{PrunRecv, PrunRecurrentRecv} = {prunSignals(NewRecv, length(InputSynapses)), prunSignals(NewRecurrentRecv, length(RecurrentInputSynapses))},
 	NewState = case length(PrunRecv) == length(InputSynapses) andalso length(PrunRecurrentRecv) == length(RecurrentInputSynapses) of
@@ -171,12 +170,10 @@ dot([SignalEl |TailSignal], [WeightEl | TailWeight], Acc) ->
 %Modulate a weight with modulation data
 learn(Phenotype, Output, Recv, [nil | _]) -> %è all'inizio,non ho segnali ricorsivi in entrata nel neurone!
 	#neuron_classic_phenotype{input_elements_data = InputSynapses} = Phenotype,
-	%io:fwrite("*****~nGENO: ~p~n INS: ~p~n RECV: ~p~n*****~n",[GenoType,Ins,Recv]),
 	NewInputSynapses = plasticity:apply_plasticity(InputSynapses, Recv, Output),
 	Phenotype#neuron_classic_phenotype{input_elements_data = NewInputSynapses};
 learn(Phenotype, Output, Recv, RecurrentRecv) ->%%inizia ad avere segnali ricorsivi in entrata
 	#neuron_classic_phenotype{input_elements_data = InputSynapses, recurrent_input_elements_data = RecurrentInputSynapses} = Phenotype,
-	%io:fwrite("****~nGENO: ~p~n INS: ~p~n RECV: ~p~n ROINS: ~p~n RORECV: ~p~n****~n",[GenoType,Ins,Recv,RoIns,RoRecv]),
 	NewInputSynapses = plasticity:apply_plasticity(InputSynapses, Recv, Output),
 	NewRecurrentInputSynapses = plasticity:apply_plasticity(RecurrentInputSynapses, RecurrentRecv, Output),
 	Phenotype#neuron_classic_phenotype{input_elements_data = NewInputSynapses, recurrent_input_elements_data = NewRecurrentInputSynapses}.

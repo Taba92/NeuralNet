@@ -6,6 +6,7 @@
 -include("utils.hrl").
 -include("genotype.hrl").
 -include("phenotype.hrl").
+-include_lib("common_test/include/ct.hrl").
 
 
 stop_phenotype(Phenotype) when is_record(Phenotype, phenotype)->
@@ -69,7 +70,7 @@ cluster_setting(Agent, Centroids) ->
 							 continue
 						end,
 	dets:traverse(DetsId, ClusterSettingFun),
-	ok.
+	Agent.
 
 %%%Start mapping section
 %%%
@@ -298,10 +299,10 @@ apply_to_scape(fit_predict, Agent) ->
 	gen_server:cast(CortexId, fit_predict_cycle),
 	receive
 		{fit_predict, another, Msg} ->
-			io:fwrite("~p~n", [Msg]),
+			ct:print(default, ?STD_IMPORTANCE, "~p~n", [Msg]),
 			apply_to_scape(fit_predict, Agent);
 		{fit_predict, finish, Msg} -> 
-			io:fwrite("~p~n", [Msg])
+			ct:print(default, ?STD_IMPORTANCE, "~p~n", [Msg])
 	end.
 
 %%Given a value Val, it perturb the value and return the perturbed val NewVal.
